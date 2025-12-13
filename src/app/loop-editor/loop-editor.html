@@ -1,0 +1,118 @@
+<div class="p-6 bg-gray-50 min-h-screen">
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 bg-white rounded-xl shadow-lg p-4">
+      <h1 class="text-2xl font-bold mb-4">Create & Edit Loop List</h1>
+
+      <div id="youtube-player-embed" class="w-full aspect-video rounded-lg overflow-hidden"></div>
+
+      <div class="mt-4 flex items-center space-x-3">
+        <p class="text-lg font-medium">Define Loop:</p>
+
+        <button mat-flat-button color="primary" (click)="setStartTime()">
+          <mat-icon>timer_10</mat-icon> Set Start: {{ currentStartTime | number : '1.1-2' }}s
+        </button>
+
+        <button mat-flat-button color="accent" (click)="setEndTime()">
+          <mat-icon>timer</mat-icon> Set End: {{ currentEndTime | number : '1.1-2' }}s
+        </button>
+
+        <button
+          mat-raised-button
+          color="warn"
+          (click)="addLoop()"
+          [disabled]="currentEndTime <= currentStartTime"
+        >
+          <mat-icon>add_circle_outline</mat-icon> Add Loop
+        </button>
+      </div>
+
+      <div class="mt-4 flex items-center space-x-3">
+        <label for="speed-select" class="text-sm font-medium">Speed:</label>
+        <select
+          id="speed-select"
+          (change)="updatePlaybackRate($event)"
+          [ngModel]="playbackRate"
+          class="p-2 border rounded-lg shadow-sm"
+        >
+          <option value="0.75">0.75x</option>
+          <option value="1.0">1.0x (Normal)</option>
+          <option value="1.5">1.5x</option>
+          <option value="2.0">2.0x</option>
+        </select>
+      </div>
+
+      <div class="mt-4 h-2 bg-gray-200 rounded-full relative"></div>
+    </div>
+
+    <div class="lg:col-span-1 space-y-6">
+      <div class="bg-white rounded-xl shadow-lg p-4">
+        <h2 class="text-xl font-semibold mb-3 border-b pb-2">List Configuration</h2>
+
+        <mat-form-field class="w-full">
+          <mat-label>List Title</mat-label>
+          <input matInput [(ngModel)]="currentList.title" />
+        </mat-form-field>
+
+        <div class="flex justify-between items-center my-3">
+          <span class="text-sm font-medium">Public Access (R4.1)</span>
+          <mat-slide-toggle [(ngModel)]="currentList.isPublic" color="primary">
+            {{ currentList.isPublic ? 'Public' : 'Private' }}
+          </mat-slide-toggle>
+        </div>
+
+        @if (currentList.isPublic) {
+        <div class="space-y-3">
+          <mat-form-field class="w-full">
+            <mat-label>Language</mat-label>
+            <mat-select [(ngModel)]="currentList.language"> </mat-select>
+          </mat-form-field>
+        </div>
+        }
+
+        <button mat-raised-button color="primary" class="w-full mt-4">
+          Save List to Cloud (R4.2)
+        </button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-lg p-4 scrollbar-thin max-h-96 overflow-y-auto">
+        <h2 class="text-xl font-semibold mb-3 border-b pb-2">
+          Defined Loops ({{ currentList.loops.length }})
+        </h2>
+
+        @if(currentList.loops.length === 0) {
+        <div>
+          class="text-gray-500 text-center py-4"> No loops defined yet. Use the controls above!
+        </div>
+        } @for (loop of currentList.loops; track loop.loopIndex) {
+        <div class="border-b py-3 last:border-b-0">
+          <div class="flex justify-between items-start">
+            <p class="font-medium">Loop {{ loop.loopIndex + 1 }}: {{ loop.name }}</p>
+            <div class="flex space-x-2">
+              <button mat-icon-button color="warn" title="Delete">
+                <mat-icon>delete</mat-icon>
+              </button>
+              <button mat-icon-button title="Reorder">
+                <mat-icon>drag_indicator</mat-icon>
+              </button>
+            </div>
+          </div>
+
+          <p class="text-sm text-gray-600">
+            Time: {{ loop.startTime | number : '1.1-2' }}s - {{ loop.endTime | number : '1.1-2' }}s
+          </p>
+
+          <mat-form-field appearance="outline" class="w-full mt-2">
+            <mat-label>Primary Text (Original / Question)</mat-label>
+            <textarea matInput [(ngModel)]="loop.primaryText" rows="2"></textarea>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="w-full">
+            <mat-label>Secondary Text (Translation / Answer)</mat-label>
+            <textarea matInput [(ngModel)]="loop.secondaryText" rows="2"></textarea>
+          </mat-form-field>
+        </div>
+        }
+      </div>
+    </div>
+  </div>
+</div>
