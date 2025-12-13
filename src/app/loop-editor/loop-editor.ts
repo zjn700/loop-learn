@@ -52,6 +52,11 @@ export class LoopEditorComponent implements OnInit {
   currentStartTime: number = 0;
   currentEndTime: number = 0;
 
+  // Playback loop state
+  playingLoopIndex: number | null = null; // index of the loop currently playing
+  isLooping: boolean = false; // whether the current playback should loop
+  private _loopChecker: any = null; // interval id for checking loop end
+
   ngOnInit() {
     // 1. Load the YouTube Iframe Player API script
     if (typeof document !== 'undefined') {
@@ -130,5 +135,64 @@ export class LoopEditorComponent implements OnInit {
     if (this.player) {
       this.player.setPlaybackRate(this.playbackRate);
     }
+  }
+
+  /** Play a loop by its index. If `loopForever` is true, it will repeatedly loop. */
+  playLoop(loopIndex: number, loopForever: boolean = false): void {
+    const loop = this.currentList.loops[loopIndex];
+    if (!loop || !this.player) return;
+
+    this.playingLoopIndex = loopIndex;
+    this.isLooping = !!loopForever;
+
+    // Seek to start and play
+    try {
+      this.player.seekTo(loop.startTime, true);
+      this.player.setPlaybackRate(this.playbackRate);
+      this.player.playVideo();
+    } catch (e) {
+      console.warn('YouTube player not ready', e);
+    }
+
+    // Clear any existing checker
+    if (this._loopChecker) {
+      clearInterval(this._loopChecker);
+      this._loopChecker = null;
+    }
+
+    // Poll the player current time and handle loop end
+    this._loopChecker = setInterval(() => {
+      if (!this.player) return;
+      const t = this.player.getCurrentTime();
+      // If we've reached or passed the end time, decide what to do
+      if (t >= loop.endTime) {
+        if (this.isLooping) {
+          // seek back to start (use seekTo with allowSeekAhead)
+          this.player.seekTo(loop.startTime, true);
+          this.player.setPlaybackRate(this.playbackRate);
+          this.player.playVideo();
+        } else {
+          // stop playback and clear state
+          this.stopLoop();
+        }
+      }
+    }, 150);
+  }
+
+  /** Stop any loop playback in progress. */
+  stopLoop(): void {
+    if (this._loopChecker) {
+      clearInterval(this._loopChecker);
+      this._loopChecker = null;
+    }
+    if (this.player) {
+      try {
+        this.player.pauseVideo();
+      } catch (e) {
+        // ignore
+      }
+    }
+    this.playingLoopIndex = null;
+    this.isLooping = false;
   }
 }

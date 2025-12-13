@@ -80,14 +80,44 @@
         </h2>
 
         @if(currentList.loops.length === 0) {
-        <div>
-          class="text-gray-500 text-center py-4"> No loops defined yet. Use the controls above!
+        <div class="text-gray-500 text-center py-4">
+          No loops defined yet. Use the controls above!
         </div>
         } @for (loop of currentList.loops; track loop.loopIndex) {
         <div class="border-b py-3 last:border-b-0">
           <div class="flex justify-between items-start">
             <p class="font-medium">Loop {{ loop.loopIndex + 1 }}: {{ loop.name }}</p>
-            <div class="flex space-x-2">
+            <div class="flex space-x-2 items-center">
+              <button
+                mat-icon-button
+                color="primary"
+                title="Play"
+                (click)="playLoop(loop.loopIndex)"
+                [disabled]="playingLoopIndex === loop.loopIndex"
+              >
+                <mat-icon>play_arrow</mat-icon>
+              </button>
+
+              <button
+                mat-icon-button
+                color="accent"
+                title="Loop"
+                (click)="playLoop(loop.loopIndex, true)"
+                [disabled]="playingLoopIndex === loop.loopIndex && isLooping"
+              >
+                <mat-icon>repeat</mat-icon>
+              </button>
+
+              <button
+                mat-icon-button
+                color="default"
+                title="Stop"
+                (click)="stopLoop()"
+                [disabled]="playingLoopIndex === null"
+              >
+                <mat-icon>stop</mat-icon>
+              </button>
+
               <button mat-icon-button color="warn" title="Delete">
                 <mat-icon>delete</mat-icon>
               </button>
@@ -101,14 +131,27 @@
             Time: {{ loop.startTime | number : '1.1-2' }}s - {{ loop.endTime | number : '1.1-2' }}s
           </p>
 
-          <mat-form-field appearance="outline" class="w-full mt-2">
-            <mat-label>Primary Text (Original / Question)</mat-label>
-            <textarea matInput [(ngModel)]="loop.primaryText" rows="2"></textarea>
+          <mat-form-field appearance="outline" style="width: 100%">
+            <label class="text-sm font-mono text-gray-500">Original / Question</label>
+            <!-- <mat-label>Primary Text (Original / Question)</mat-label> -->
+            <textarea
+              class="wrap-break-word"
+              matInput
+              placeholder="Enter the original text or question here..."
+              [(ngModel)]="loop.primaryText"
+              rows="2"
+            ></textarea>
           </mat-form-field>
 
-          <mat-form-field appearance="outline" class="w-full">
-            <mat-label>Secondary Text (Translation / Answer)</mat-label>
-            <textarea matInput [(ngModel)]="loop.secondaryText" rows="2"></textarea>
+          <mat-form-field appearance="outline" style="width: 100%">
+            <label class="text-sm font-mono text-gray-500">Translation / Answer</label>
+            <!-- <mat-label>Secondary Text (Translation / Answer)</mat-label> -->
+            <textarea
+              class="wrap-break-word"
+              matInput
+              [(ngModel)]="loop.secondaryText"
+              rows="2"
+            ></textarea>
           </mat-form-field>
         </div>
         }
