@@ -50,28 +50,60 @@
 
         <mat-form-field class="w-full">
           <mat-label>List Title</mat-label>
-          <input matInput [(ngModel)]="currentList.title" />
+          <input matInput [(ngModel)]="currentList.title" (ngModelChange)="markListChanged()" />
         </mat-form-field>
 
         <div class="flex justify-between items-center my-3">
           <span class="text-sm font-medium">Public Access (R4.1)</span>
-          <mat-slide-toggle [(ngModel)]="currentList.isPublic" color="primary">
+          <mat-slide-toggle
+            [(ngModel)]="currentList.isPublic"
+            (ngModelChange)="markListChanged()"
+            color="primary"
+          >
             {{ currentList.isPublic ? 'Public' : 'Private' }}
           </mat-slide-toggle>
         </div>
 
-        @if (currentList.isPublic) {
-        <div class="space-y-3">
+        <div *ngIf="currentList.isPublic" class="space-y-3">
           <mat-form-field class="w-full">
             <mat-label>Language</mat-label>
-            <mat-select [(ngModel)]="currentList.language"> </mat-select>
+            <mat-select [(ngModel)]="currentList.language" (ngModelChange)="markListChanged()">
+            </mat-select>
           </mat-form-field>
         </div>
-        }
 
-        <button mat-raised-button color="primary" class="w-full mt-4">
-          Save List to Cloud (R4.2)
-        </button>
+        <div class="mt-4 space-y-2">
+          <button mat-raised-button color="primary" class="w-full">
+            Save List to Cloud (R4.2)
+          </button>
+          <div class="flex space-x-2">
+            <button mat-stroked-button color="primary" (click)="openSaveAsDialog()">Save As</button>
+            <button mat-stroked-button (click)="saveListToLocalStorage()">Save (legacy)</button>
+            <button mat-stroked-button (click)="loadListFromLocalStorage()">Load Local</button>
+            <button mat-button color="warn" (click)="clearSavedList()">Clear Local</button>
+          </div>
+
+          <div class="flex items-center space-x-2 pt-2">
+            <label class="text-sm">Saved lists:</label>
+            <select [(ngModel)]="selectedSavedId" class="p-2 border rounded">
+              <option [ngValue]="null">-- none --</option>
+              <option *ngFor="let s of savedLists" [value]="s.id">
+                {{ s.name }} — {{ s.videoId }}
+              </option>
+            </select>
+            <button mat-stroked-button (click)="loadSelected()" [disabled]="!selectedSavedId">
+              Load
+            </button>
+            <button
+              mat-button
+              color="warn"
+              (click)="deleteSavedById(selectedSavedId)"
+              [disabled]="!selectedSavedId"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="bg-white rounded-xl shadow-lg p-4 scrollbar-thin max-h-96 overflow-y-auto">
@@ -79,12 +111,14 @@
           Defined Loops ({{ currentList.loops.length }})
         </h2>
 
-        @if(currentList.loops.length === 0) {
-        <div class="text-gray-500 text-center py-4">
+        <div *ngIf="currentList.loops.length === 0" class="text-gray-500 text-center py-4">
           No loops defined yet. Use the controls above!
         </div>
-        } @for (loop of currentList.loops; track loop.loopIndex) {
-        <div class="border-b py-3 last:border-b-0">
+
+        <div
+          *ngFor="let loop of currentList.loops; let i = index; trackBy: trackByLoopIndex"
+          class="border-b py-3 last:border-b-0"
+        >
           <div class="flex justify-between items-start">
             <p class="font-medium">Loop {{ loop.loopIndex + 1 }}: {{ loop.name }}</p>
             <div class="flex space-x-2 items-center">
@@ -139,6 +173,7 @@
               matInput
               placeholder="Enter the original text or question here..."
               [(ngModel)]="loop.primaryText"
+              (ngModelChange)="markListChanged()"
               rows="2"
             ></textarea>
           </mat-form-field>
@@ -150,11 +185,11 @@
               class="wrap-break-word"
               matInput
               [(ngModel)]="loop.secondaryText"
+              (ngModelChange)="markListChanged()"
               rows="2"
             ></textarea>
           </mat-form-field>
         </div>
-        }
       </div>
     </div>
   </div>
