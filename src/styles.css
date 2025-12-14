@@ -1,9 +1,10 @@
+@import '@angular/material/prebuilt-themes/indigo-pink.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* Angular Material typography and theme imports */
-@import '@angular/material/prebuilt-themes/indigo-pink.css';
 
 /* Optional: Custom scrollbar styles */
 .scrollbar-thin::-webkit-scrollbar {

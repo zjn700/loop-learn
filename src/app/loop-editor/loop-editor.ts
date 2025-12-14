@@ -68,7 +68,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   // Playback loop state
   playingLoopIndex: number | null = null; // index of the loop currently playing
   isLooping: boolean = false; // whether the current playback should loop
-  constructor(private snackBar: MatSnackBar, private dialog: MatDialog) {}
+  constructor(private snackBar: MatSnackBar, private dialog: MatDialog) { }
 
   // open save-as dialog using MatDialog
   openSaveAsDialog(): void {
@@ -113,7 +113,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
           this.persistSavedLists();
           try {
             this.snackBar.open('Autosaved', '', { duration: 800 });
-          } catch {}
+          } catch { }
           return;
         }
       }
@@ -121,7 +121,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       this.saveListToLocalStorage(false);
       try {
         this.snackBar.open('Autosaved', '', { duration: 800 });
-      } catch {}
+      } catch { }
     });
 
     // 1. Load the YouTube Iframe Player API script
@@ -282,6 +282,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
   /** Save the current list to localStorage (serializes dates). */
   saveListToLocalStorage(showNotify: boolean = true): void {
+    if (typeof localStorage === 'undefined') return;
     try {
       const copy: any = {
         ...this.currentList,
@@ -293,18 +294,19 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       if (showNotify) {
         try {
           this.snackBar.open('Saved locally', '', { duration: 1200 });
-        } catch {}
+        } catch { }
       }
     } catch (e) {
       console.error('Failed to save list', e);
       try {
         this.snackBar.open('Failed to save list to local storage', 'OK');
-      } catch {}
+      } catch { }
     }
   }
 
   /** Load the list from localStorage if present and revive dates. */
   loadListFromLocalStorage(): void {
+    if (typeof localStorage === 'undefined') return;
     try {
       const raw = localStorage.getItem(this.STORAGE_KEY);
       if (!raw) return;
@@ -337,7 +339,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       console.log('Loaded list from localStorage');
       try {
         this.snackBar.open('Loaded local list', '', { duration: 900 });
-      } catch {}
+      } catch { }
     } catch (e) {
       console.error('Failed to load list', e);
     }
@@ -345,14 +347,16 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
   /** Clear saved list from localStorage. */
   clearSavedList(): void {
+    if (typeof localStorage === 'undefined') return;
     localStorage.removeItem(this.STORAGE_KEY);
     try {
       this.snackBar.open('Cleared saved list', '', { duration: 900 });
-    } catch {}
+    } catch { }
   }
 
   // --- Saved lists (multiple) helpers ---
   loadSavedListsFromStorage(): void {
+    if (typeof localStorage === 'undefined') return;
     try {
       const raw = localStorage.getItem(this.STORAGE_LISTS_KEY);
       if (!raw) return;
@@ -364,13 +368,14 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   }
 
   persistSavedLists(): void {
+    if (typeof localStorage === 'undefined') return;
     try {
       localStorage.setItem(this.STORAGE_LISTS_KEY, JSON.stringify(this.savedLists));
     } catch (e) {
       console.error('Failed to persist saved lists', e);
       try {
         this.snackBar.open('Failed to persist saved lists', 'OK');
-      } catch {}
+      } catch { }
     }
   }
 
@@ -393,7 +398,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     this.persistSavedLists();
     try {
       this.snackBar.open('Saved list', '', { duration: 1200 });
-    } catch {}
+    } catch { }
   }
 
   loadSavedById(id: string | null): void {
@@ -404,7 +409,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     if (entry.videoId) this.videoId = entry.videoId;
     try {
       this.snackBar.open('Loaded saved list', '', { duration: 900 });
-    } catch {}
+    } catch { }
   }
 
   loadSelected(): void {
@@ -421,20 +426,20 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     this.persistSavedLists();
     try {
       this.snackBar.open('Deleted saved list', '', { duration: 900 });
-    } catch {}
+    } catch { }
   }
 
   ngOnDestroy(): void {
     if (this.saveSub) {
       try {
         this.saveSub.unsubscribe();
-      } catch {}
+      } catch { }
       this.saveSub = null;
     }
     if (this._loopChecker) {
       try {
         clearInterval(this._loopChecker);
-      } catch {}
+      } catch { }
       this._loopChecker = null;
     }
   }
