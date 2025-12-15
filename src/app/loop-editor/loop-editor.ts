@@ -15,7 +15,9 @@ import { debounceTime } from 'rxjs/operators';
 import { MatDialog } from '@angular/material/dialog';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
+import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { SaveAsDialogComponent } from './save-as-dialog';
+import { FileStorageService } from '../services/file-storage.service';
 
 @Component({
   selector: 'app-loop-editor',
@@ -35,13 +37,17 @@ import { SaveAsDialogComponent } from './save-as-dialog';
     FormsModule,
     MatInputModule,
     MatSnackBarModule,
+    MatInputModule,
+    MatSnackBarModule,
     MatDialogModule,
+    DragDropModule,
     /* Angular Material Modules, CommonModule, Forms... */
   ],
 })
 export class LoopEditorComponent implements OnInit, OnDestroy {
   // R2.1: Video ID for the player
   videoId: string = 'epnNIxhKJSc'; //'yXQViZ_6M9o'; // Example ID
+  videoInput: string = ''; // Input for loading new video
   player: any; // YouTube Player instance
 
   // R6.3: Playback speed control
@@ -49,6 +55,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
   // R2.3: Current Loop List data
   currentList: LoopList = {
+    id: 'temp-1', // Temporary ID
     ownerId: 'user-123',
     title: 'New Language Practice',
     description: '',
@@ -58,6 +65,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     language: '',
     skillLevel: '',
     createdAt: new Date(),
+    updatedAt: new Date(),
     loops: [] as Loop[],
   };
 
@@ -68,7 +76,11 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   // Playback loop state
   playingLoopIndex: number | null = null; // index of the loop currently playing
   isLooping: boolean = false; // whether the current playback should loop
-  constructor(private snackBar: MatSnackBar, private dialog: MatDialog) { }
+  constructor(
+    private snackBar: MatSnackBar,
+    private dialog: MatDialog,
+    private fileStorage: FileStorageService
+  ) { }
 
   // open save-as dialog using MatDialog
   openSaveAsDialog(): void {
@@ -78,50 +90,34 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     });
     ref.afterClosed().subscribe((name?: string) => {
       if (!name) return;
-      this.saveCurrentAsName(name);
+      this.currentList.title = name; // Update current list title
+      this.saveToLibrary(); // Save to library with the new title
     });
   }
   private _loopChecker: any = null; // interval id for checking loop end
+
+  // Library / Folder State
+  libraryFiles: { name: string; handle: any }[] = [];
+  isLibraryAccessGranted: boolean = false;
+  hasLibraryFolder: boolean = false;
 
   // Autosave
   private saveSubject = new Subject<void>();
   private saveSub: Subscription | null = null;
 
-  // Saved lists (multiple) support
-  private readonly STORAGE_LISTS_KEY = 'loop-learn.savedLists';
-  savedLists: Array<any> = [];
-  selectedSavedId: string | null = null;
-
   ngOnInit() {
-    // Attempt to load saved list from localStorage before player initialization
-    this.loadListFromLocalStorage();
-    // load saved lists index
-    this.loadSavedListsFromStorage();
+    // Try to restore library access
+    this.initLibrary();
 
-    // setup autosave (debounced)
-    this.saveSub = this.saveSubject.pipe(debounceTime(600)).subscribe(() => {
-      // If a saved entry is selected, update it, otherwise write legacy single key
-      if (this.selectedSavedId) {
-        const idx = this.savedLists.findIndex((s) => s.id === this.selectedSavedId);
-        if (idx !== -1) {
-          const copy: any = {
-            ...this.currentList,
-            createdAt: this.currentList.createdAt ? this.currentList.createdAt.toISOString() : null,
-            loops: this.currentList.loops.map((l) => ({ ...l })),
-          };
-          this.savedLists[idx].list = copy;
-          this.persistSavedLists();
-          try {
-            this.snackBar.open('Autosaved', '', { duration: 800 });
-          } catch { }
-          return;
-        }
-      }
-      // fallback: legacy single-key save
-      this.saveListToLocalStorage(false);
-      try {
-        this.snackBar.open('Autosaved', '', { duration: 800 });
-      } catch { }
+    // setup autosave (debounced) - OPTIONAL: We might want explicit save for files, 
+    // or autosave to the specific file handle if we have one. 
+    // For now, let's keep autosave disabled or just logging, as file writes are more heavy.
+    // Changing strategy: Autosave is risky with direct file writes without user intent.
+    // We will rely on manual save for now, or autosave to a temp local storage if needed.
+    // Let's keep the subject but maybe just log or do nothing.
+    this.saveSub = this.saveSubject.pipe(debounceTime(2000)).subscribe(() => {
+      // Option: Autosave to currently open file handle if implemented
+      // this.saveToLibrary(); 
     });
 
     // 1. Load the YouTube Iframe Player API script
@@ -133,7 +129,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       document.body.appendChild(tag);
     }
     // 2. Window callback for player initialization
-    if (typeof window !== 'undefined' && window.localStorage) {
+    if (typeof window !== 'undefined') {
       (window as any)['onYouTubeIframeAPIReady'] = () => {
         this.player = new (window as any).YT.Player('youtube-player-embed', {
           height: '400',
@@ -154,11 +150,49 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   onPlayerReady(event: any): void {
     // R6.3: Set initial playback speed
     event.target.setPlaybackRate(this.playbackRate);
-    // You can now access player controls, e.g., event.target.playVideo();
+
+    // Auto-set title from video if current title is default
+    const videoData = event.target.getVideoData();
+    if (videoData && videoData.title) {
+      if (!this.currentList.title || this.currentList.title === 'New Language Practice') {
+        this.currentList.title = videoData.title;
+      }
+    }
   }
 
   onPlayerStateChange(event: any): void {
     // R6.1: Logic to handle looping transitions here
+  }
+
+  /** Load a video from the input URL or ID */
+  loadVideo(): void {
+    if (!this.videoInput) return;
+
+    // Simple regex to extract ID from URL or accept raw ID
+    // Supports: youtu.be/ID, youtube.com/watch?v=ID, or just ID (11 chars)
+    let id = this.videoInput.trim();
+    const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = id.match(regExp);
+
+    if (match && match[2].length === 11) {
+      id = match[2];
+    }
+
+    if (id) {
+      this.videoId = id;
+      this.currentList.videoId = id;
+      this.currentList.videoUrl = `https://youtu.be/${id}`;
+
+      if (this.player && this.player.loadVideoById) {
+        this.player.loadVideoById(id);
+      } else {
+        // If player not ready yet, it will use this.videoId on init
+      }
+      this.snackBar.open('Video loaded', '', { duration: 2000 });
+      this.videoInput = ''; // clear input
+    } else {
+      this.snackBar.open('Invalid Video ID or URL', 'OK');
+    }
   }
 
   /** R3.2: Sets the loop start time to the current video time. */
@@ -263,170 +297,202 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     this.isLooping = false;
   }
 
+  deleteLoop(index: number): void {
+    if (index >= 0 && index < this.currentList.loops.length) {
+      this.currentList.loops.splice(index, 1);
+      this.reindexLoops();
+      this.markListChanged();
+      this.snackBar.open('Loop deleted', '', { duration: 1000 });
+    }
+  }
+
+  drop(event: CdkDragDrop<string[]>): void {
+    moveItemInArray(this.currentList.loops, event.previousIndex, event.currentIndex);
+    this.reindexLoops();
+    this.markListChanged();
+  }
+
+  private reindexLoops(): void {
+    this.currentList.loops.forEach((loop, i) => {
+      loop.loopIndex = i;
+    });
+  }
+
   // Simple trackBy for loops list
   trackByLoopIndex(index: number, item: Loop): number {
     return item?.loopIndex ?? index;
   }
 
-  /** Notify that the list changed so autosave can run (debounced). */
+  /** Notify that the list changed. */
   markListChanged(): void {
-    try {
-      this.saveSubject.next();
-    } catch (e) {
-      console.error('Failed to schedule autosave', e);
-    }
+    this.saveSubject.next();
   }
 
-  // Local storage helpers
-  private readonly STORAGE_KEY = 'loop-learn.currentList';
+  // --- Folder / Library Logic ---
 
-  /** Save the current list to localStorage (serializes dates). */
-  saveListToLocalStorage(showNotify: boolean = true): void {
-    if (typeof localStorage === 'undefined') return;
-    try {
-      const copy: any = {
-        ...this.currentList,
-        createdAt: this.currentList.createdAt ? this.currentList.createdAt.toISOString() : null,
-        loops: this.currentList.loops.map((l) => ({ ...l })),
-      };
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(copy));
-      console.log('Saved list to localStorage');
-      if (showNotify) {
-        try {
-          this.snackBar.open('Saved locally', '', { duration: 1200 });
-        } catch { }
+  async initLibrary(): Promise<void> {
+    if (!this.fileStorage.isFileSystemAccessSupported) return;
+
+    // Check if we have a stored handle
+    const restored = await this.fileStorage.restoreDirectoryHandle();
+    this.hasLibraryFolder = restored;
+
+    if (restored) {
+      // We have a handle, but need to verify permissions
+      // We cannot prompt immediately on init (needs gesture), so we check 'read'
+      this.isLibraryAccessGranted = await this.fileStorage.verifyPermission(false);
+      if (this.isLibraryAccessGranted) {
+        this.refreshLibrary();
       }
-    } catch (e) {
-      console.error('Failed to save list', e);
-      try {
-        this.snackBar.open('Failed to save list to local storage', 'OK');
-      } catch { }
     }
   }
 
-  /** Load the list from localStorage if present and revive dates. */
-  loadListFromLocalStorage(): void {
-    if (typeof localStorage === 'undefined') return;
+  async selectLibraryFolder(): Promise<void> {
     try {
-      const raw = localStorage.getItem(this.STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      // revive createdAt
-      if (parsed.createdAt) {
-        parsed.createdAt = new Date(parsed.createdAt);
+      await this.fileStorage.selectBaseFolder();
+      this.hasLibraryFolder = true;
+      this.isLibraryAccessGranted = true;
+      await this.refreshLibrary();
+      this.snackBar.open('Library folder selected', '', { duration: 2000 });
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        console.error('Select folder failed', e);
+        this.snackBar.open('Failed to select folder', 'OK');
+      }
+    }
+  }
+
+  async verifyLibraryPermission(): Promise<void> {
+    try {
+      const granted = await this.fileStorage.verifyPermission(true);
+      this.isLibraryAccessGranted = granted;
+      if (granted) {
+        this.refreshLibrary();
       } else {
-        parsed.createdAt = new Date();
+        this.snackBar.open('Permission denied', 'OK');
       }
-      // ensure loops array
-      parsed.loops = Array.isArray(parsed.loops) ? parsed.loops : [];
-      // ensure loopIndex values and defaults
-      parsed.loops = parsed.loops.map((l: any, idx: number) => ({
-        loopIndex: typeof l.loopIndex === 'number' ? l.loopIndex : idx,
-        name: l.name || `Loop ${idx + 1}`,
-        startTime: Number(l.startTime) || 0,
-        endTime: Number(l.endTime) || 0,
-        primaryText: l.primaryText || '',
-        secondaryText: l.secondaryText || '',
-      }));
+    } catch (e) {
+      console.error('Verify permission failed', e);
+    }
+  }
 
-      this.currentList = parsed as LoopList;
+  async refreshLibrary(): Promise<void> {
+    try {
+      this.libraryFiles = await this.fileStorage.getFiles();
+    } catch (e) {
+      console.error('Failed to list files', e);
+      this.libraryFiles = [];
+    }
+  }
 
-      // If the saved list references a different video, update videoId used by player init
-      if (this.currentList.videoId) {
-        this.videoId = this.currentList.videoId;
+  async loadFromLibrary(fileItem: any): Promise<void> {
+    try {
+      const data = await this.fileStorage.loadFile(fileItem.handle);
+      this.loadList(data);
+      // Update Title to match filename (minus .json) if needed?
+      // Or keep internal title. Let's keep internal title but maybe suggest filename on save.
+    } catch (e) {
+      console.error('Failed to load file', e);
+      this.snackBar.open('Failed to load file', 'OK');
+    }
+  }
+
+  async saveToLibrary(): Promise<void> {
+    if (!this.hasLibraryFolder) {
+      this.snackBar.open('No library folder selected', 'OK');
+      return;
+    }
+
+    // use current title as filename
+    const filename = this.currentList.title.trim() || 'Untitled';
+
+    try {
+      // Ensure we have write permission
+      const granted = await this.fileStorage.verifyPermission(true);
+      if (!granted) {
+        this.snackBar.open('Write permission needed', 'OK');
+        return;
       }
 
-      console.log('Loaded list from localStorage');
-      try {
-        this.snackBar.open('Loaded local list', '', { duration: 900 });
-      } catch { }
+      // Update timestamp
+      this.currentList.updatedAt = new Date();
+
+      await this.fileStorage.saveToFolder(filename, this.currentList);
+      this.snackBar.open('Saved to Library', '', { duration: 2000 });
+      this.refreshLibrary(); // refresh list in case it's a new file
     } catch (e) {
-      console.error('Failed to load list', e);
+      console.error('Failed to save to library', e);
+      this.snackBar.open('Failed to save', 'OK');
+    }
+  }
+  // --- File System Storage ---
+
+  get isFileAccessSupported(): boolean {
+    return this.fileStorage.isFileSystemAccessSupported;
+  }
+
+  async saveToFile(): Promise<void> {
+    if (!this.isFileAccessSupported) {
+      // Fallback (Safari): Prompt for name first
+      const ref = this.dialog.open(SaveAsDialogComponent, {
+        width: '320px',
+        data: { name: this.currentList.title || '' },
+      });
+      ref.afterClosed().subscribe(async (name?: string) => {
+        if (!name) return;
+        this.currentList.title = name;
+        try {
+          await this.fileStorage.saveFile(this.currentList, name);
+          this.snackBar.open('File downloaded', '', { duration: 2000 });
+        } catch (e) {
+          console.error('Save file failed', e);
+        }
+      });
+      return;
+    }
+
+    // Native File System API Supported
+    try {
+      await this.fileStorage.saveFile(this.currentList, this.currentList.title || 'loop-list');
+      this.snackBar.open('File saved', '', { duration: 2000 });
+    } catch (e) {
+      console.error('Save file failed', e);
+      this.snackBar.open('Failed to save file', 'OK');
     }
   }
 
-  /** Clear saved list from localStorage. */
-  clearSavedList(): void {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.removeItem(this.STORAGE_KEY);
-    try {
-      this.snackBar.open('Cleared saved list', '', { duration: 900 });
-    } catch { }
-  }
-
-  // --- Saved lists (multiple) helpers ---
-  loadSavedListsFromStorage(): void {
-    if (typeof localStorage === 'undefined') return;
-    try {
-      const raw = localStorage.getItem(this.STORAGE_LISTS_KEY);
-      if (!raw) return;
-      this.savedLists = JSON.parse(raw) || [];
-      if (this.savedLists.length > 0) this.selectedSavedId = this.savedLists[0].id;
-    } catch (e) {
-      console.error('Failed to load saved lists', e);
+  async openFromFile(): Promise<void> {
+    if (this.isFileAccessSupported) {
+      const data = await this.fileStorage.openFile();
+      if (data) {
+        this.loadList(data);
+      }
+    } else {
+      // Trigger hidden input click
+      const input = document.getElementById('fileInput') as HTMLInputElement;
+      if (input) input.click();
     }
   }
 
-  persistSavedLists(): void {
-    if (typeof localStorage === 'undefined') return;
+  async onFileSelected(event: any): Promise<void> {
+    const file = event.target.files[0];
+    if (!file) return;
     try {
-      localStorage.setItem(this.STORAGE_LISTS_KEY, JSON.stringify(this.savedLists));
+      const data = await this.fileStorage.readFile(file);
+      this.loadList(data);
+      // Reset input
+      event.target.value = '';
     } catch (e) {
-      console.error('Failed to persist saved lists', e);
-      try {
-        this.snackBar.open('Failed to persist saved lists', 'OK');
-      } catch { }
+      console.error('Read file failed', e);
+      this.snackBar.open('Failed to read file', 'OK');
     }
   }
 
-  saveCurrentAsName(name: string): void {
-    const id = Date.now().toString();
-    const copy: any = {
-      ...this.currentList,
-      createdAt: this.currentList.createdAt ? this.currentList.createdAt.toISOString() : null,
-      loops: this.currentList.loops.map((l) => ({ ...l })),
-    };
-    const entry = {
-      id,
-      name,
-      videoId: this.videoId,
-      savedAt: new Date().toISOString(),
-      list: copy,
-    };
-    this.savedLists.unshift(entry);
-    this.selectedSavedId = id;
-    this.persistSavedLists();
-    try {
-      this.snackBar.open('Saved list', '', { duration: 1200 });
-    } catch { }
-  }
-
-  loadSavedById(id: string | null): void {
-    if (!id) return;
-    const entry = this.savedLists.find((s) => s.id === id);
-    if (!entry) return;
-    this.currentList = entry.list as LoopList;
-    if (entry.videoId) this.videoId = entry.videoId;
-    try {
-      this.snackBar.open('Loaded saved list', '', { duration: 900 });
-    } catch { }
-  }
-
-  loadSelected(): void {
-    this.loadSavedById(this.selectedSavedId);
-  }
-
-  deleteSavedById(id: string | null): void {
-    if (!id) return;
-    const idx = this.savedLists.findIndex((s) => s.id === id);
-    if (idx === -1) return;
-    this.savedLists.splice(idx, 1);
-    if (this.savedLists.length > 0) this.selectedSavedId = this.savedLists[0].id;
-    else this.selectedSavedId = null;
-    this.persistSavedLists();
-    try {
-      this.snackBar.open('Deleted saved list', '', { duration: 900 });
-    } catch { }
+  private loadList(data: LoopList): void {
+    this.currentList = data;
+    if (data.videoId) this.videoId = data.videoId;
+    // Reset player state if needed, or just let user play
+    this.snackBar.open('List loaded from file', '', { duration: 2000 });
   }
 
   ngOnDestroy(): void {
