@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, NgZone } from '@angular/core';
 import { DecimalPipe, NgIf, NgFor } from '@angular/common';
 import { YouTubePlayerModule } from '@angular/youtube-player';
 import { Loop, LoopList } from '../models/loop';
@@ -79,7 +79,8 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   constructor(
     private snackBar: MatSnackBar,
     private dialog: MatDialog,
-    private fileStorage: FileStorageService
+    private fileStorage: FileStorageService,
+    private ngZone: NgZone
   ) { }
 
   // open save-as dialog using MatDialog
@@ -90,8 +91,10 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     });
     ref.afterClosed().subscribe((name?: string) => {
       if (!name) return;
-      this.currentList.title = name; // Update current list title
-      this.saveToLibrary(); // Save to library with the new title
+      this.ngZone.run(() => {
+        this.currentList.title = name; // Update current list title
+        this.saveToLibrary(); // Save to library with the new title
+      });
     });
   }
   private _loopChecker: any = null; // interval id for checking loop end
@@ -152,47 +155,103 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     event.target.setPlaybackRate(this.playbackRate);
 
     // Auto-set title from video if current title is default
-    const videoData = event.target.getVideoData();
-    if (videoData && videoData.title) {
-      if (!this.currentList.title || this.currentList.title === 'New Language Practice') {
-        this.currentList.title = videoData.title;
+    this.ngZone.run(() => {
+      const videoData = event.target.getVideoData();
+      if (videoData && videoData.title) {
+        if (!this.currentList.title || this.currentList.title === 'New Language Practice') {
+          this.currentList.title = videoData.title;
+        }
       }
-    }
+    });
   }
 
   onPlayerStateChange(event: any): void {
     // R6.1: Logic to handle looping transitions here
+    // Also update title if we just loaded a new video
+    if (event.data === (window as any).YT.PlayerState.PLAYING || event.data === (window as any).YT.PlayerState.PAUSED || event.data === (window as any).YT.PlayerState.CUED) {
+      this.ngZone.run(() => {
+        const videoData = event.target.getVideoData();
+        if (videoData && videoData.title) {
+          if (!this.currentList.title || this.currentList.title === 'New Language Practice' || this.currentList.title === '') {
+            this.currentList.title = videoData.title;
+          }
+        }
+      });
+    }
   }
 
   /** Load a video from the input URL or ID */
-  loadVideo(): void {
+  async loadVideo(): Promise<void> {
     if (!this.videoInput) return;
 
-    // Simple regex to extract ID from URL or accept raw ID
-    // Supports: youtu.be/ID, youtube.com/watch?v=ID, or just ID (11 chars)
+    // Parse ID
     let id = this.videoInput.trim();
     const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
     const match = id.match(regExp);
-
     if (match && match[2].length === 11) {
       id = match[2];
     }
 
-    if (id) {
-      this.videoId = id;
-      this.currentList.videoId = id;
-      this.currentList.videoUrl = `https://youtu.be/${id}`;
-
-      if (this.player && this.player.loadVideoById) {
-        this.player.loadVideoById(id);
-      } else {
-        // If player not ready yet, it will use this.videoId on init
-      }
-      this.snackBar.open('Video loaded', '', { duration: 2000 });
-      this.videoInput = ''; // clear input
-    } else {
+    if (!id) {
       this.snackBar.open('Invalid Video ID or URL', 'OK');
+      return;
     }
+
+    // 1. CLEAR INPUT
+    this.videoInput = '';
+
+    // 2. CHECK LIBRARY FOR EXISTING FILE
+    if (this.isLibraryAccessGranted) {
+      const existingFile = await this.scanLibraryForVideoId(id);
+      if (existingFile) {
+        this.ngZone.run(async () => {
+          this.snackBar.open('Found existing loops for this video', '', { duration: 2500 });
+          await this.loadFromLibrary(existingFile);
+        });
+        return;
+      }
+    }
+
+    // 3. NOT FOUND -> LOAD NEW
+    this.videoId = id;
+
+    // Reset current list for the new video
+    this.currentList = {
+      id: crypto.randomUUID(), // or Date.now().toString()
+      ownerId: 'user-123',
+      title: '', // Pending fetch from player
+      description: '',
+      videoId: id,
+      videoUrl: `https://youtu.be/${id}`,
+      isPublic: false,
+      language: '',
+      skillLevel: '',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      loops: [],
+    };
+
+    // Update player
+    if (this.player && this.player.loadVideoById) {
+      this.player.loadVideoById(id);
+    }
+
+    this.snackBar.open('There are no loops yet for this video. You can create one now', 'OK', { duration: 5000 });
+  }
+
+  async scanLibraryForVideoId(videoId: string): Promise<any | null> {
+    // Brute-force scan of small libraries
+    for (const fileItem of this.libraryFiles) {
+      try {
+        const data = await this.fileStorage.loadFile(fileItem.handle);
+        if (data.videoId === videoId) {
+          return fileItem;
+        }
+      } catch (e) {
+        console.warn(`Failed to scan file ${fileItem.name}`, e);
+      }
+    }
+    return null;
   }
 
   /** R3.2: Sets the loop start time to the current video time. */
@@ -350,10 +409,12 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   async selectLibraryFolder(): Promise<void> {
     try {
       await this.fileStorage.selectBaseFolder();
-      this.hasLibraryFolder = true;
-      this.isLibraryAccessGranted = true;
-      await this.refreshLibrary();
-      this.snackBar.open('Library folder selected', '', { duration: 2000 });
+      this.ngZone.run(async () => {
+        this.hasLibraryFolder = true;
+        this.isLibraryAccessGranted = true;
+        await this.refreshLibrary();
+        this.snackBar.open('Library folder selected', '', { duration: 2000 });
+      });
     } catch (e: any) {
       if (e.name !== 'AbortError') {
         console.error('Select folder failed', e);
@@ -365,12 +426,14 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   async verifyLibraryPermission(): Promise<void> {
     try {
       const granted = await this.fileStorage.verifyPermission(true);
-      this.isLibraryAccessGranted = granted;
-      if (granted) {
-        this.refreshLibrary();
-      } else {
-        this.snackBar.open('Permission denied', 'OK');
-      }
+      this.ngZone.run(() => {
+        this.isLibraryAccessGranted = granted;
+        if (granted) {
+          this.refreshLibrary();
+        } else {
+          this.snackBar.open('Permission denied', 'OK');
+        }
+      });
     } catch (e) {
       console.error('Verify permission failed', e);
     }
@@ -379,21 +442,30 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   async refreshLibrary(): Promise<void> {
     try {
       this.libraryFiles = await this.fileStorage.getFiles();
+      this.ngZone.run(() => {
+        // just to be sure change detection runs even if getFiles finished quickly
+      });
     } catch (e) {
       console.error('Failed to list files', e);
-      this.libraryFiles = [];
+      this.ngZone.run(() => {
+        this.libraryFiles = [];
+      });
     }
   }
 
   async loadFromLibrary(fileItem: any): Promise<void> {
     try {
       const data = await this.fileStorage.loadFile(fileItem.handle);
-      this.loadList(data);
+      this.ngZone.run(() => {
+        this.loadList(data);
+      });
       // Update Title to match filename (minus .json) if needed?
       // Or keep internal title. Let's keep internal title but maybe suggest filename on save.
     } catch (e) {
       console.error('Failed to load file', e);
-      this.snackBar.open('Failed to load file', 'OK');
+      this.ngZone.run(() => {
+        this.snackBar.open('Failed to load file', 'OK');
+      });
     }
   }
 
@@ -418,8 +490,10 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       this.currentList.updatedAt = new Date();
 
       await this.fileStorage.saveToFolder(filename, this.currentList);
-      this.snackBar.open('Saved to Library', '', { duration: 2000 });
-      this.refreshLibrary(); // refresh list in case it's a new file
+      this.ngZone.run(() => {
+        this.snackBar.open('Saved to Library', '', { duration: 2000 });
+        this.refreshLibrary(); // refresh list in case it's a new file
+      });
     } catch (e) {
       console.error('Failed to save to library', e);
       this.snackBar.open('Failed to save', 'OK');
@@ -440,13 +514,17 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       });
       ref.afterClosed().subscribe(async (name?: string) => {
         if (!name) return;
-        this.currentList.title = name;
-        try {
-          await this.fileStorage.saveFile(this.currentList, name);
-          this.snackBar.open('File downloaded', '', { duration: 2000 });
-        } catch (e) {
-          console.error('Save file failed', e);
-        }
+        this.ngZone.run(async () => {
+          this.currentList.title = name;
+          try {
+            await this.fileStorage.saveFile(this.currentList, name);
+            this.ngZone.run(() => {
+              this.snackBar.open('File downloaded', '', { duration: 2000 });
+            });
+          } catch (e) {
+            console.error('Save file failed', e);
+          }
+        });
       });
       return;
     }
@@ -454,7 +532,9 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     // Native File System API Supported
     try {
       await this.fileStorage.saveFile(this.currentList, this.currentList.title || 'loop-list');
-      this.snackBar.open('File saved', '', { duration: 2000 });
+      this.ngZone.run(() => {
+        this.snackBar.open('File saved', '', { duration: 2000 });
+      });
     } catch (e) {
       console.error('Save file failed', e);
       this.snackBar.open('Failed to save file', 'OK');
@@ -465,7 +545,9 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     if (this.isFileAccessSupported) {
       const data = await this.fileStorage.openFile();
       if (data) {
-        this.loadList(data);
+        this.ngZone.run(() => {
+          this.loadList(data);
+        });
       }
     } else {
       // Trigger hidden input click
@@ -479,9 +561,11 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     if (!file) return;
     try {
       const data = await this.fileStorage.readFile(file);
-      this.loadList(data);
-      // Reset input
-      event.target.value = '';
+      this.ngZone.run(() => {
+        this.loadList(data);
+        // Reset input
+        event.target.value = '';
+      });
     } catch (e) {
       console.error('Read file failed', e);
       this.snackBar.open('Failed to read file', 'OK');
@@ -490,7 +574,13 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
   private loadList(data: LoopList): void {
     this.currentList = data;
-    if (data.videoId) this.videoId = data.videoId;
+    if (data.videoId) {
+      this.videoId = data.videoId;
+      // Load the video in the player
+      if (this.player && this.player.loadVideoById) {
+        this.player.loadVideoById(this.videoId);
+      }
+    }
     // Reset player state if needed, or just let user play
     this.snackBar.open('List loaded from file', '', { duration: 2000 });
   }

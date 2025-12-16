@@ -5,7 +5,8 @@
 
       <div class="mb-4 flex space-x-2">
         <mat-form-field class="w-full" appearance="outline">
-          <mat-label>YouTube URL or Video ID</mat-label>
+          <label class="text-sm font-mono text-gray-500">YouTube URL or Video ID</label>
+          <!-- <mat-label>YouTube URL or Video ID</mat-label> -->
           <input matInput [(ngModel)]="videoInput" (keyup.enter)="loadVideo()"
             placeholder="e.g. https://youtu.be/..." />
           <button mat-icon-button matSuffix (click)="loadVideo()" [disabled]="!videoInput">
