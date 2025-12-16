@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, NgZone } from '@angular/core';
+import { Component, OnInit, OnDestroy, NgZone, HostListener } from '@angular/core';
 import { DecimalPipe, NgIf, NgFor } from '@angular/common';
 import { YouTubePlayerModule } from '@angular/youtube-player';
 import { Loop, LoopList } from '../models/loop';
@@ -583,6 +583,33 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     }
     // Reset player state if needed, or just let user play
     this.snackBar.open('List loaded from file', '', { duration: 2000 });
+  }
+
+  @HostListener('window:keydown', ['$event'])
+  handleKeyboardEvent(event: KeyboardEvent) {
+    // Ignore if user is typing in an input
+    const target = event.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      return;
+    }
+
+    if (event.key === 'ArrowLeft') {
+      this.adjustTime(-0.1);
+      event.preventDefault(); // Prevent scrolling if needed
+    } else if (event.key === 'ArrowRight') {
+      this.adjustTime(0.1);
+      event.preventDefault();
+    }
+  }
+
+  /** Adjust current video time by delta seconds */
+  adjustTime(delta: number): void {
+    if (!this.player || !this.player.getCurrentTime) return;
+
+    const currentTime = this.player.getCurrentTime();
+    const newTime = Math.max(0, currentTime + delta);
+
+    this.player.seekTo(newTime, true);
   }
 
   ngOnDestroy(): void {

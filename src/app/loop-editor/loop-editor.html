@@ -20,12 +20,24 @@
       <div class="mt-4 flex items-center space-x-3">
         <p class="text-lg font-medium">Define Loop:</p>
 
+        <!-- <button mat-icon-button (click)="adjustTime(-0.1)" title="-0.1s"> -->
+        <button mat-icon-button (click)="adjustTime(-0.1)">
+          <p class="text-xs">-0.1s</p>
+          <mat-icon>replay_10</mat-icon>
+          <!-- <mat-icon>replay_10</mat-icon> <span class="text-xs">-0.1</span> -->
+        </button>
+
         <button mat-flat-button color="primary" (click)="setStartTime()">
           <mat-icon>timer_10</mat-icon> Set Start: {{ currentStartTime | number : '1.1-2' }}s
         </button>
 
         <button mat-flat-button color="accent" (click)="setEndTime()">
           <mat-icon>timer</mat-icon> Set End: {{ currentEndTime | number : '1.1-2' }}s
+        </button>
+
+        <button mat-icon-button (click)="adjustTime(0.1)">
+          <p class="text-xs">+0.1s</p>
+          <mat-icon>forward_10</mat-icon>
         </button>
 
         <button mat-raised-button color="warn" (click)="addLoop()" [disabled]="currentEndTime <= currentStartTime">
@@ -39,6 +51,7 @@
           class="p-2 border rounded-lg shadow-sm">
           <option value="0.75">0.75x</option>
           <option value="1.0">1.0x (Normal)</option>
+          <option value="1.25">1.25x</option>
           <option value="1.5">1.5x</option>
           <option value="2.0">2.0x</option>
         </select>
