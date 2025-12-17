@@ -22,9 +22,10 @@
 
         <!-- <button mat-icon-button (click)="adjustTime(-0.1)" title="-0.1s"> -->
         <button mat-icon-button (click)="adjustTime(-0.1)">
-          <p class="text-xs">-0.1s</p>
-          <mat-icon>replay_10</mat-icon>
-          <!-- <mat-icon>replay_10</mat-icon> <span class="text-xs">-0.1</span> -->
+          <!-- <p class="text-xs">-0.1s</p> -->
+          <!-- <mat-icon>replay_10</mat-icon> -->
+          <mat-icon style="transform: scale(1.5);">arrow_circle_left_two_tone</mat-icon>
+          <!-- <mat-icon>replay_10</mat-icon> <span class=" text-xs">-0.1</span> -->
         </button>
 
         <button mat-flat-button color="primary" (click)="setStartTime()">
@@ -35,9 +36,11 @@
           <mat-icon>timer</mat-icon> Set End: {{ currentEndTime | number : '1.1-2' }}s
         </button>
 
-        <button mat-icon-button (click)="adjustTime(0.1)">
-          <p class="text-xs">+0.1s</p>
-          <mat-icon>forward_10</mat-icon>
+        <button mat-icon-button (click)="adjustTime(0.5)">
+          <!-- <p class="text-xs">+0.1s</p> -->
+          <mat-icon style="transform: scale(1.5);">arrow_circle_right_two_tone</mat-icon>
+
+          <!-- <mat-icon>forward_10</mat-icon> -->
         </button>
 
         <button mat-raised-button color="warn" (click)="addLoop()" [disabled]="currentEndTime <= currentStartTime">
