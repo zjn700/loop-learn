@@ -146,8 +146,17 @@
       </div>
 
       <div class="bg-white rounded-xl shadow-lg p-4 scrollbar-thin max-h-96 overflow-y-auto">
-        <h2 class="text-xl font-semibold mb-3 border-b pb-2">
-          Defined Loops ({{ currentList.loops.length }})
+        <h2 class="text-xl font-semibold mb-3 border-b pb-2 flex justify-between items-center">
+          <span>Defined Loops ({{ currentList.loops.length }})</span>
+          <div *ngIf="selectedLoops.size > 0" class="flex items-center space-x-2">
+            <span class="text-sm font-medium text-blue-600">{{ selectedLoops.size }} selected</span>
+            <button *ngIf="!isPlayingExpanded" mat-flat-button color="accent" (click)="playExpandedLoop()">
+              <mat-icon>repeat_on</mat-icon> Play selected
+            </button>
+            <button *ngIf="isPlayingExpanded" mat-flat-button color="warn" (click)="stopExpandedLoop()">
+              <mat-icon>stop</mat-icon> Stop & Clear
+            </button>
+          </div>
         </h2>
 
         <div *ngIf="currentList.loops.length === 0" class="text-gray-500 text-center py-4">
@@ -161,8 +170,12 @@
             <div class="custom-placeholder" *cdkDragPlaceholder></div>
 
             <div class="flex justify-between items-start">
-              <p class="font-medium">Loop {{ loop.loopIndex + 1 }}</p>
-              <!-- <p class="font-medium">Loop {{ loop.loopIndex + 1 }}: {{ loop.name }}</p> -->
+              <div class="flex items-center space-x-3 mb-2">
+                <!-- Checkbox for selection -->
+                <mat-checkbox [checked]="isLoopSelected(i)" (change)="toggleLoopSelection(i)" color="primary">
+                </mat-checkbox>
+                <span class="font-medium text-lg">Loop {{ loop.loopIndex + 1 }}</span>
+              </div>
               <div class="flex space-x-2 items-center">
                 <button mat-icon-button color="primary" title="Play" (click)="playLoop(loop.loopIndex)"
                   [disabled]="playingLoopIndex === loop.loopIndex">

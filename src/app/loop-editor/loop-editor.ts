@@ -15,6 +15,7 @@ import { debounceTime } from 'rxjs/operators';
 import { MatDialog } from '@angular/material/dialog';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { SaveAsDialogComponent } from './save-as-dialog';
 import { FileStorageService } from '../services/file-storage.service';
@@ -41,6 +42,7 @@ import { FileStorageService } from '../services/file-storage.service';
     MatSnackBarModule,
     MatDialogModule,
     DragDropModule,
+    MatCheckboxModule,
     /* Angular Material Modules, CommonModule, Forms... */
   ],
 })
@@ -75,7 +77,18 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
   // Playback loop state
   playingLoopIndex: number | null = null; // index of the loop currently playing
+  // For expanded loop, we might not track a single index, but we need to know we are playing custom range
+  isPlayingExpanded: boolean = false;
+
+  // Expanded Loop Sequence State
+  playQueue: Loop[] = [];
+  currentQueueIndex: number = 0;
+
   isLooping: boolean = false; // whether the current playback should loop
+
+  // Selection State
+  selectedLoops: Set<number> = new Set();
+
   constructor(
     private snackBar: MatSnackBar,
     private dialog: MatDialog,
@@ -303,11 +316,74 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     if (!loop || !this.player) return;
 
     this.playingLoopIndex = loopIndex;
-    this.isLooping = !!loopForever;
+    this.isPlayingExpanded = false;
+    this._playRange(loop.startTime, loop.endTime, loopForever);
+  }
+
+  /** Play expanded loop from selected loops */
+  playExpandedLoop(): void {
+    if (this.selectedLoops.size === 0) return;
+
+    // Get selected loops and sort them by index to ensure correct order
+    const indices = Array.from(this.selectedLoops).sort((a, b) => a - b);
+    const loops = this.currentList.loops.filter((_, i) => indices.includes(i));
+
+    // Safety check: ensure loops are sorted by index effectively
+    loops.sort((a, b) => a.loopIndex - b.loopIndex);
+
+    if (loops.length === 0) return;
+
+    // Setup Sequence
+    this.playQueue = loops;
+    this.currentQueueIndex = 0;
+
+    this.playingLoopIndex = null;
+    this.isPlayingExpanded = true;
+    this.isLooping = true; // Expanded mode loops the whole sequence forever
+
+    this._playSequenceItem();
+  }
+
+  /** Stop expanded loop and clear selection */
+  stopExpandedLoop(): void {
+    this.stopLoop();
+    this.selectedLoops.clear();
+    this.playQueue = [];
+    this.currentQueueIndex = 0;
+  }
+
+  private _playSequenceItem(): void {
+    if (this.currentQueueIndex >= this.playQueue.length) {
+      // Sequence finished, loop back to start
+      this.currentQueueIndex = 0;
+    }
+
+    const loop = this.playQueue[this.currentQueueIndex];
+    if (!loop) return;
+
+    // Use a specialized checker for the sequence item
+    this._playRange(loop.startTime, loop.endTime, false);
+    // Note: we pass false for 'loopForever' because _playRange logic 
+    // will be slightly modified or we handle the "looping" manually in the interval.
+    // Actually, let's look at _playRange logic below to adapt it.
+  }
+
+  private _playRange(startTime: number, endTime: number, loopForever: boolean): void {
+    // If we are in expanded mode, 'loopForever' param here applies to the *single item*? 
+    // No, we want to play this item once, then go to next.
+    // So for Sequence items, loopForever is false.
+
+    // However, we need to distinguish between "Single Loop Repeating" and "Expanded Sequence Repeating".
+    // inner isLooping state is used by the checker.
+
+    if (!this.isPlayingExpanded) {
+      this.isLooping = !!loopForever;
+    }
+    // If expanded, we handle logic in checker.
 
     // Seek to start and play
     try {
-      this.player.seekTo(loop.startTime, true);
+      this.player.seekTo(startTime, true);
       this.player.setPlaybackRate(this.playbackRate);
       this.player.playVideo();
     } catch (e) {
@@ -324,19 +400,36 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     this._loopChecker = setInterval(() => {
       if (!this.player) return;
       const t = this.player.getCurrentTime();
-      // If we've reached or passed the end time, decide what to do
-      if (t >= loop.endTime) {
-        if (this.isLooping) {
-          // seek back to start (use seekTo with allowSeekAhead)
-          this.player.seekTo(loop.startTime, true);
+
+      // If we've reached or passed the end time
+      if (t >= endTime) {
+        if (this.isPlayingExpanded) {
+          // Sequence Logic: Move to next item
+          this.currentQueueIndex++;
+          this._playSequenceItem();
+        } else if (this.isLooping) {
+          // Standard Single Loop Logic: Seek back to start
+          this.player.seekTo(startTime, true);
           this.player.setPlaybackRate(this.playbackRate);
           this.player.playVideo();
         } else {
-          // stop playback and clear state
+          // Stop playback
           this.stopLoop();
         }
       }
     }, 150);
+  }
+
+  toggleLoopSelection(index: number): void {
+    if (this.selectedLoops.has(index)) {
+      this.selectedLoops.delete(index);
+    } else {
+      this.selectedLoops.add(index);
+    }
+  }
+
+  isLoopSelected(index: number): boolean {
+    return this.selectedLoops.has(index);
   }
 
   /** Stop any loop playback in progress. */
@@ -353,7 +446,10 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       }
     }
     this.playingLoopIndex = null;
+    this.isPlayingExpanded = false;
     this.isLooping = false;
+    this.playQueue = [];
+    this.currentQueueIndex = 0;
   }
 
   deleteLoop(index: number): void {
