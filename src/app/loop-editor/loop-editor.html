@@ -17,209 +17,214 @@
 
       <div id="youtube-player-embed" class="w-full aspect-video rounded-lg overflow-hidden"></div>
 
-      <div class="mt-4 flex items-center space-x-3">
-        <p class="text-lg font-medium">Define Loop:</p>
+      <button mat-icon-button (click)="toggleState()">
+        <mat-icon>{{ isToggled ? 'pause' : 'play_arrow'}}</mat-icon>
+      </button>
 
-        <!-- <button mat-icon-button (click)="adjustTime(-0.1)" title="-0.1s"> -->
-        <button mat-icon-button (click)="adjustTime(-0.1)">
-          <!-- <p class="text-xs">-0.1s</p> -->
-          <!-- <mat-icon>replay_10</mat-icon> -->
-          <mat-icon style="transform: scale(1.5);">arrow_circle_left_two_tone</mat-icon>
-          <!-- <mat-icon>replay_10</mat-icon> <span class=" text-xs">-0.1</span> -->
-        </button>
+      <p>{{ videoState() }}</p>
 
-        <button mat-flat-button color="primary" (click)="setStartTime()">
-          <mat-icon>timer_10</mat-icon> Set Start: {{ currentStartTime | number : '1.1-2' }}s
-        </button>
+      <p class="text-lg font-medium">Define Loop:</p>
 
-        <button mat-flat-button color="accent" (click)="setEndTime()">
-          <mat-icon>timer</mat-icon> Set End: {{ currentEndTime | number : '1.1-2' }}s
-        </button>
+      <!-- <button mat-icon-button (click)="adjustTime(-0.1)" title="-0.1s"> -->
+      <button mat-icon-button (click)="adjustTime(-0.1)">
+        <!-- <p class="text-xs">-0.1s</p> -->
+        <!-- <mat-icon>replay_10</mat-icon> -->
+        <mat-icon style="transform: scale(1.5);">arrow_circle_left_two_tone</mat-icon>
+        <!-- <mat-icon>replay_10</mat-icon> <span class=" text-xs">-0.1</span> -->
+      </button>
 
-        <button mat-icon-button (click)="adjustTime(0.5)">
-          <!-- <p class="text-xs">+0.1s</p> -->
-          <mat-icon style="transform: scale(1.5);">arrow_circle_right_two_tone</mat-icon>
+      <button mat-flat-button color="primary" (click)="setStartTime()">
+        <mat-icon>timer_10</mat-icon> Set Start: {{ currentStartTime | number : '1.1-2' }}s
+      </button>
 
-          <!-- <mat-icon>forward_10</mat-icon> -->
-        </button>
+      <button mat-flat-button color="accent" (click)="setEndTime()">
+        <mat-icon>timer</mat-icon> Set End: {{ currentEndTime | number : '1.1-2' }}s
+      </button>
 
-        <button mat-raised-button color="warn" (click)="addLoop()" [disabled]="currentEndTime <= currentStartTime">
-          <mat-icon>add_circle_outline</mat-icon> Add Loop
-        </button>
-      </div>
+      <button mat-icon-button (click)="adjustTime(0.5)">
+        <!-- <p class="text-xs">+0.1s</p> -->
+        <mat-icon style="transform: scale(1.5);">arrow_circle_right_two_tone</mat-icon>
 
-      <div class="mt-4 flex items-center space-x-3">
-        <label for="speed-select" class="text-sm font-medium">Speed:</label>
-        <select id="speed-select" (change)="updatePlaybackRate($event)" [ngModel]="playbackRate"
-          class="p-2 border rounded-lg shadow-sm">
-          <option value="0.75">0.75x</option>
-          <option value="1.0">1.0x (Normal)</option>
-          <option value="1.25">1.25x</option>
-          <option value="1.5">1.5x</option>
-          <option value="2.0">2.0x</option>
-        </select>
-      </div>
+        <!-- <mat-icon>forward_10</mat-icon> -->
+      </button>
 
-      <div class="mt-4 h-2 bg-gray-200 rounded-full relative"></div>
+      <button mat-raised-button color="warn" (click)="addLoop()" [disabled]="currentEndTime <= currentStartTime">
+        <mat-icon>add_circle_outline</mat-icon> Add Loop
+      </button>
     </div>
 
-    <div class="lg:col-span-1 space-y-6">
-      <div class="bg-white rounded-xl shadow-lg p-4">
-        <h2 class="text-xl font-semibold mb-3 border-b pb-2">List Configuration</h2>
+    <div class="mt-4 flex items-center space-x-3">
+      <label for="speed-select" class="text-sm font-medium">Speed:</label>
+      <select id="speed-select" (change)="updatePlaybackRate($event)" [ngModel]="playbackRate"
+        class="p-2 border rounded-lg shadow-sm">
+        <option value="0.75">0.75x</option>
+        <option value="1.0">1.0x (Normal)</option>
+        <option value="1.25">1.25x</option>
+        <option value="1.5">1.5x</option>
+        <option value="2.0">2.0x</option>
+      </select>
+    </div>
 
+    <div class="mt-4 h-2 bg-gray-200 rounded-full relative"></div>
+  </div>
+
+  <div class="lg:col-span-1 space-y-6">
+    <div class="bg-white rounded-xl shadow-lg p-4">
+      <h2 class="text-xl font-semibold mb-3 border-b pb-2">List Configuration</h2>
+
+      <mat-form-field class="w-full">
+        <mat-label>List Title</mat-label>
+        <input matInput [(ngModel)]="currentList.title" (ngModelChange)="markListChanged()" />
+      </mat-form-field>
+
+      <div class="flex justify-between items-center my-3">
+        <span class="text-sm font-medium">Public Access (R4.1)</span>
+        <mat-slide-toggle [(ngModel)]="currentList.isPublic" (ngModelChange)="markListChanged()" color="primary">
+          {{ currentList.isPublic ? 'Public' : 'Private' }}
+        </mat-slide-toggle>
+      </div>
+
+      <div *ngIf="currentList.isPublic" class="space-y-3">
         <mat-form-field class="w-full">
-          <mat-label>List Title</mat-label>
-          <input matInput [(ngModel)]="currentList.title" (ngModelChange)="markListChanged()" />
+          <mat-label>Language</mat-label>
+          <mat-select [(ngModel)]="currentList.language" (ngModelChange)="markListChanged()">
+          </mat-select>
         </mat-form-field>
+      </div>
 
-        <div class="flex justify-between items-center my-3">
-          <span class="text-sm font-medium">Public Access (R4.1)</span>
-          <mat-slide-toggle [(ngModel)]="currentList.isPublic" (ngModelChange)="markListChanged()" color="primary">
-            {{ currentList.isPublic ? 'Public' : 'Private' }}
-          </mat-slide-toggle>
+      <div class="mt-4 space-y-2">
+        <button mat-raised-button color="primary" class="w-full" (click)="saveToFile()">
+          <mat-icon>save</mat-icon> Save to File (Local / Cloud)
+        </button>
+        <button mat-stroked-button color="accent" class="w-full" (click)="openFromFile()">
+          <mat-icon>folder_open</mat-icon> Open File
+        </button>
+        <input type="file" id="fileInput" (change)="onFileSelected($event)" accept=".json" style="display:none" />
+        <div class="flex space-x-2 pt-1">
+          <button mat-stroked-button color="primary" (click)="openSaveAsDialog()">Save As</button>
+          <button *ngIf="isFileAccessSupported" mat-stroked-button (click)="saveToLibrary()"
+            [disabled]="!isLibraryAccessGranted">
+            Save (Update)
+          </button>
         </div>
 
-        <div *ngIf="currentList.isPublic" class="space-y-3">
-          <mat-form-field class="w-full">
-            <mat-label>Language</mat-label>
-            <mat-select [(ngModel)]="currentList.language" (ngModelChange)="markListChanged()">
-            </mat-select>
-          </mat-form-field>
-        </div>
+        <div *ngIf="isFileAccessSupported" class="border-t pt-3 mt-2">
+          <h3 class="text-sm font-semibold mb-2 flex justify-between items-center">
+            Library Folder
+            <button mat-icon-button color="primary" (click)="selectLibraryFolder()" title="Select/Change Folder">
+              <mat-icon>folder</mat-icon>
+            </button>
+          </h3>
 
-        <div class="mt-4 space-y-2">
-          <button mat-raised-button color="primary" class="w-full" (click)="saveToFile()">
-            <mat-icon>save</mat-icon> Save to File (Local / Cloud)
-          </button>
-          <button mat-stroked-button color="accent" class="w-full" (click)="openFromFile()">
-            <mat-icon>folder_open</mat-icon> Open File
-          </button>
-          <input type="file" id="fileInput" (change)="onFileSelected($event)" accept=".json" style="display:none" />
-          <div class="flex space-x-2 pt-1">
-            <button mat-stroked-button color="primary" (click)="openSaveAsDialog()">Save As</button>
-            <button *ngIf="isFileAccessSupported" mat-stroked-button (click)="saveToLibrary()"
-              [disabled]="!isLibraryAccessGranted">
-              Save (Update)
+          <div *ngIf="hasLibraryFolder && !isLibraryAccessGranted" class="p-2 bg-yellow-50 rounded text-sm mb-2">
+            <p>Permission needed to access library.</p>
+            <button mat-stroked-button color="accent" class="mt-1 w-full" (click)="verifyLibraryPermission()">
+              Grant Permission
             </button>
           </div>
 
-          <div *ngIf="isFileAccessSupported" class="border-t pt-3 mt-2">
-            <h3 class="text-sm font-semibold mb-2 flex justify-between items-center">
-              Library Folder
-              <button mat-icon-button color="primary" (click)="selectLibraryFolder()" title="Select/Change Folder">
-                <mat-icon>folder</mat-icon>
-              </button>
-            </h3>
-
-            <div *ngIf="hasLibraryFolder && !isLibraryAccessGranted" class="p-2 bg-yellow-50 rounded text-sm mb-2">
-              <p>Permission needed to access library.</p>
-              <button mat-stroked-button color="accent" class="mt-1 w-full" (click)="verifyLibraryPermission()">
-                Grant Permission
+          <div *ngIf="hasLibraryFolder && isLibraryAccessGranted">
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-xs text-gray-500">{{ libraryFiles.length }} files</span>
+              <button mat-icon-button (click)="refreshLibrary()" title="Refresh List">
+                <mat-icon>refresh</mat-icon>
               </button>
             </div>
-
-            <div *ngIf="hasLibraryFolder && isLibraryAccessGranted">
-              <div class="flex justify-between items-center mb-1">
-                <span class="text-xs text-gray-500">{{ libraryFiles.length }} files</span>
-                <button mat-icon-button (click)="refreshLibrary()" title="Refresh List">
-                  <mat-icon>refresh</mat-icon>
+            <ul class="space-y-1 max-h-48 overflow-y-auto border rounded p-1">
+              <li *ngIf="libraryFiles.length === 0" class="text-xs text-gray-400 p-1">No JSON files found.</li>
+              <li *ngFor="let file of libraryFiles">
+                <button mat-button class="w-full text-left truncate !justify-start" (click)="loadFromLibrary(file)">
+                  <mat-icon class="text-gray-400 !mr-2 text-sm">description</mat-icon>
+                  <span class="truncate text-sm">{{ file.name }}</span>
                 </button>
-              </div>
-              <ul class="space-y-1 max-h-48 overflow-y-auto border rounded p-1">
-                <li *ngIf="libraryFiles.length === 0" class="text-xs text-gray-400 p-1">No JSON files found.</li>
-                <li *ngFor="let file of libraryFiles">
-                  <button mat-button class="w-full text-left truncate !justify-start" (click)="loadFromLibrary(file)">
-                    <mat-icon class="text-gray-400 !mr-2 text-sm">description</mat-icon>
-                    <span class="truncate text-sm">{{ file.name }}</span>
-                  </button>
-                </li>
-              </ul>
-            </div>
+              </li>
+            </ul>
+          </div>
 
-            <div *ngIf="!hasLibraryFolder"
-              class="p-3 text-center text-sm text-gray-500 border-2 border-dashed rounded-lg cursor-pointer hover:bg-gray-50"
-              (click)="selectLibraryFolder()">
-              Click to select a folder <br> to serve as your Library.
-            </div>
+          <div *ngIf="!hasLibraryFolder"
+            class="p-3 text-center text-sm text-gray-500 border-2 border-dashed rounded-lg cursor-pointer hover:bg-gray-50"
+            (click)="selectLibraryFolder()">
+            Click to select a folder <br> to serve as your Library.
           </div>
         </div>
       </div>
+    </div>
 
-      <div class="bg-white rounded-xl shadow-lg p-4 scrollbar-thin max-h-96 overflow-y-auto">
-        <h2 class="text-xl font-semibold mb-3 border-b pb-2 flex justify-between items-center">
-          <span>Defined Loops ({{ currentList.loops.length }})</span>
-          <div *ngIf="selectedLoops.size > 0" class="flex items-center space-x-2">
-            <span class="text-sm font-medium text-blue-600">{{ selectedLoops.size }} selected</span>
-            <button *ngIf="!isPlayingExpanded" mat-flat-button color="accent" (click)="playExpandedLoop()">
-              <mat-icon>repeat_on</mat-icon> Play selected
-            </button>
-            <button *ngIf="isPlayingExpanded" mat-flat-button color="warn" (click)="stopExpandedLoop()">
-              <mat-icon>stop</mat-icon> Stop & Clear
-            </button>
-          </div>
-        </h2>
-
-        <div *ngIf="currentList.loops.length === 0" class="text-gray-500 text-center py-4">
-          No loops defined yet. Use the controls above!
+    <div class="bg-white rounded-xl shadow-lg p-4 scrollbar-thin max-h-96 overflow-y-auto">
+      <h2 class="text-xl font-semibold mb-3 border-b pb-2 flex justify-between items-center">
+        <span>Defined Loops ({{ currentList.loops.length }})</span>
+        <div *ngIf="selectedLoops.size > 0" class="flex items-center space-x-2">
+          <span class="text-sm font-medium text-blue-600">{{ selectedLoops.size }} selected</span>
+          <button *ngIf="!isPlayingExpanded" mat-flat-button color="accent" (click)="playExpandedLoop()">
+            <mat-icon>repeat_on</mat-icon> Play selected
+          </button>
+          <button *ngIf="isPlayingExpanded" mat-flat-button color="warn" (click)="stopExpandedLoop()">
+            <mat-icon>stop</mat-icon> Stop & Clear
+          </button>
         </div>
+      </h2>
 
-        <div cdkDropList (cdkDropListDropped)="drop($event)" class="bg-white">
-          <div *ngFor="let loop of currentList.loops; let i = index; trackBy: trackByLoopIndex"
-            class="border-b py-3 last:border-b-0 bg-white" cdkDrag>
-            <!-- Drag Placeholder / Preview Styles could be added here if needed -->
-            <div class="custom-placeholder" *cdkDragPlaceholder></div>
+      <div *ngIf="currentList.loops.length === 0" class="text-gray-500 text-center py-4">
+        No loops defined yet. Use the controls above!
+      </div>
 
-            <div class="flex justify-between items-start">
-              <div class="flex items-center space-x-3 mb-2">
-                <!-- Checkbox for selection -->
-                <mat-checkbox [checked]="isLoopSelected(i)" (change)="toggleLoopSelection(i)" color="primary">
-                </mat-checkbox>
-                <span class="font-medium text-lg">Loop {{ loop.loopIndex + 1 }}</span>
-              </div>
-              <div class="flex space-x-2 items-center">
-                <button mat-icon-button color="primary" title="Play" (click)="playLoop(loop.loopIndex)"
-                  [disabled]="playingLoopIndex === loop.loopIndex">
-                  <mat-icon>play_arrow</mat-icon>
-                </button>
+      <div cdkDropList (cdkDropListDropped)="drop($event)" class="bg-white">
+        <div *ngFor="let loop of currentList.loops; let i = index; trackBy: trackByLoopIndex"
+          class="border-b py-3 last:border-b-0 bg-white" cdkDrag>
+          <!-- Drag Placeholder / Preview Styles could be added here if needed -->
+          <div class="custom-placeholder" *cdkDragPlaceholder></div>
 
-                <button mat-icon-button color="accent" title="Loop" (click)="playLoop(loop.loopIndex, true)"
-                  [disabled]="playingLoopIndex === loop.loopIndex && isLooping">
-                  <mat-icon>repeat</mat-icon>
-                </button>
-
-                <button mat-icon-button color="default" title="Stop" (click)="stopLoop()"
-                  [disabled]="playingLoopIndex === null">
-                  <mat-icon>stop</mat-icon>
-                </button>
-
-                <button mat-icon-button color="warn" title="Delete" (click)="deleteLoop(i)">
-                  <mat-icon>delete</mat-icon>
-                </button>
-                <button mat-icon-button title="Reorder" cdkDragHandle class="cursor-grab active:cursor-grabbing">
-                  <mat-icon>drag_indicator</mat-icon>
-                </button>
-              </div>
+          <div class="flex justify-between items-start">
+            <div class="flex items-center space-x-3 mb-2">
+              <!-- Checkbox for selection -->
+              <mat-checkbox [checked]="isLoopSelected(i)" (change)="toggleLoopSelection(i)" color="primary">
+              </mat-checkbox>
+              <span class="font-medium text-lg">Loop {{ loop.loopIndex + 1 }}</span>
             </div>
+            <div class="flex space-x-2 items-center">
+              <button mat-icon-button color="primary" title="Play" (click)="playLoop(loop.loopIndex)"
+                [disabled]="playingLoopIndex === loop.loopIndex">
+                <mat-icon>play_arrow</mat-icon>
+              </button>
 
-            <p class="text-sm text-gray-600">
-              Time: {{ loop.startTime | number : '1.1-2' }}s - {{ loop.endTime | number : '1.1-2' }}s
-            </p>
+              <button mat-icon-button color="accent" title="Loop" (click)="playLoop(loop.loopIndex, true)"
+                [disabled]="playingLoopIndex === loop.loopIndex && isLooping">
+                <mat-icon>repeat</mat-icon>
+              </button>
 
-            <mat-form-field appearance="outline" style="width: 100%">
-              <label class="text-sm font-mono text-gray-500">Original / Question</label>
-              <!-- <mat-label>Primary Text (Original / Question)</mat-label> -->
-              <textarea class="wrap-break-word" matInput placeholder="Enter the original text or question here..."
-                [(ngModel)]="loop.primaryText" (ngModelChange)="markListChanged()" rows="2"></textarea>
-            </mat-form-field>
+              <button mat-icon-button color="default" title="Stop" (click)="stopLoop()"
+                [disabled]="playingLoopIndex === null">
+                <mat-icon>stop</mat-icon>
+              </button>
 
-            <mat-form-field appearance="outline" style="width: 100%">
-              <label class="text-sm font-mono text-gray-500">Translation / Answer</label>
-              <!-- <mat-label>Secondary Text (Translation / Answer)</mat-label> -->
-              <textarea class="wrap-break-word" matInput [(ngModel)]="loop.secondaryText"
-                (ngModelChange)="markListChanged()" rows="2"></textarea>
-            </mat-form-field>
+              <button mat-icon-button color="warn" title="Delete" (click)="deleteLoop(i)">
+                <mat-icon>delete</mat-icon>
+              </button>
+              <button mat-icon-button title="Reorder" cdkDragHandle class="cursor-grab active:cursor-grabbing">
+                <mat-icon>drag_indicator</mat-icon>
+              </button>
+            </div>
           </div>
+
+          <p class="text-sm text-gray-600">
+            Time: {{ loop.startTime | number : '1.1-2' }}s - {{ loop.endTime | number : '1.1-2' }}s
+          </p>
+
+          <mat-form-field appearance="outline" style="width: 100%">
+            <label class="text-sm font-mono text-gray-500">Original / Question</label>
+            <!-- <mat-label>Primary Text (Original / Question)</mat-label> -->
+            <textarea class="wrap-break-word" matInput placeholder="Enter the original text or question here..."
+              [(ngModel)]="loop.primaryText" (ngModelChange)="markListChanged()" rows="2"></textarea>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" style="width: 100%">
+            <label class="text-sm font-mono text-gray-500">Translation / Answer</label>
+            <!-- <mat-label>Secondary Text (Translation / Answer)</mat-label> -->
+            <textarea class="wrap-break-word" matInput [(ngModel)]="loop.secondaryText"
+              (ngModelChange)="markListChanged()" rows="2"></textarea>
+          </mat-form-field>
         </div>
       </div>
     </div>
   </div>
+</div>

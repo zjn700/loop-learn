@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, NgZone, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, NgZone, HostListener, signal } from '@angular/core';
 import { DecimalPipe, NgIf, NgFor } from '@angular/common';
 import { YouTubePlayerModule } from '@angular/youtube-player';
 import { Loop, LoopList } from '../models/loop';
@@ -52,6 +52,29 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   videoInput: string = ''; // Input for loading new video
   player: any; // YouTube Player instance
 
+  isToggled = false;
+
+  videoState = signal<string>('Paused');
+
+  toggleState() {
+    this.isToggled = !this.isToggled;
+    if (this.isToggled) {
+      this.player.playVideo();
+      this.videoState.set('Playing');
+    } else {
+      this.player.pauseVideo();
+      this.videoState.set('Paused');
+    }
+    console.log('1 Toggle state:', this.isToggled);
+    console.log('1 Video state:', this.videoState());
+  }
+  setToggleState(state: boolean) {
+    this.isToggled = state;
+    this.videoState.set(state ? 'Playing' : 'Paused');
+    console.log('2 Video state:', this.videoState());
+    console.log('2 Toggle state:', this.isToggled);
+  }
+
   // R6.3: Playback speed control
   playbackRate: number = 1.0;
 
@@ -84,7 +107,9 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   playQueue: Loop[] = [];
   currentQueueIndex: number = 0;
 
+
   isLooping: boolean = false; // whether the current playback should loop
+
 
   // Selection State
   selectedLoops: Set<number> = new Set();
@@ -111,6 +136,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     });
   }
   private _loopChecker: any = null; // interval id for checking loop end
+
 
   // Library / Folder State
   libraryFiles: { name: string; handle: any }[] = [];
@@ -153,6 +179,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
           videoId: this.videoId,
           playerVars: {
             playsinline: 1,
+            controls: 0,
           },
           events: {
             onReady: this.onPlayerReady.bind(this),
@@ -180,7 +207,16 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
   onPlayerStateChange(event: any): void {
     // R6.1: Logic to handle looping transitions here
-    // Also update title if we just loaded a new video
+    console.log('Player state changed:', event.data);
+    if (event.data === (window as any).YT.PlayerState.PLAYING) {
+      this.setToggleState(true);
+      // this.toggleState();
+    } else if (event.data === (window as any).YT.PlayerState.PAUSED) {
+      this.setToggleState(false);
+    } else if (event.data === (window as any).YT.PlayerState.ENDED) {
+      this.setToggleState(false);
+    }
+    // Also update title if we just loaded a new video or started playing
     if (event.data === (window as any).YT.PlayerState.PLAYING || event.data === (window as any).YT.PlayerState.PAUSED || event.data === (window as any).YT.PlayerState.CUED) {
       this.ngZone.run(() => {
         const videoData = event.target.getVideoData();
@@ -243,6 +279,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       updatedAt: new Date(),
       loops: [],
     };
+
 
     // Update player
     if (this.player && this.player.loadVideoById) {
@@ -386,6 +423,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       this.player.seekTo(startTime, true);
       this.player.setPlaybackRate(this.playbackRate);
       this.player.playVideo();
+      this.setToggleState(true);
     } catch (e) {
       console.warn('YouTube player not ready', e);
     }
@@ -409,6 +447,8 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
           this._playSequenceItem();
         } else if (this.isLooping) {
           // Standard Single Loop Logic: Seek back to start
+          this.player.seekTo(startTime, true);
+          this.player.setPlaybackRate(this.playbackRate);
           this.player.seekTo(startTime, true);
           this.player.setPlaybackRate(this.playbackRate);
           this.player.playVideo();
@@ -441,6 +481,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     if (this.player) {
       try {
         this.player.pauseVideo();
+        this.setToggleState(false);
       } catch (e) {
         // ignore
       }
