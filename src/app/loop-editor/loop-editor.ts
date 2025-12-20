@@ -48,6 +48,7 @@ import { FileStorageService } from '../services/file-storage.service';
 })
 export class LoopEditorComponent implements OnInit, OnDestroy {
   // R2.1: Video ID for the player
+  // https://youtube.com/shorts/tUpcnX-a3Kk?si=xyPtIj7q1fPUm_97
   videoId: string = 'epnNIxhKJSc'; //'yXQViZ_6M9o'; // Example ID
   videoInput: string = ''; // Input for loading new video
   player: any; // YouTube Player instance
@@ -55,8 +56,9 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   isToggled = false;
 
   videoState = signal<string>('Paused');
+  // vidTitle = signal<string>('zuul');
 
-  toggleState() {
+  toggleVideoState() {
     this.isToggled = !this.isToggled;
     if (this.isToggled) {
       this.player.playVideo();
@@ -68,7 +70,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     console.log('1 Toggle state:', this.isToggled);
     console.log('1 Video state:', this.videoState());
   }
-  setToggleState(state: boolean) {
+  setVideoState(state: boolean) {
     this.isToggled = state;
     this.videoState.set(state ? 'Playing' : 'Paused');
     console.log('2 Video state:', this.videoState());
@@ -83,6 +85,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     id: 'temp-1', // Temporary ID
     ownerId: 'user-123',
     title: 'New Language Practice',
+    // title: this.vidTitle(),
     description: '',
     videoId: this.videoId,
     videoUrl: `https://youtu.be/${this.videoId}`,
@@ -193,7 +196,8 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   onPlayerReady(event: any): void {
     // R6.3: Set initial playback speed
     event.target.setPlaybackRate(this.playbackRate);
-
+    // this.vidTitle.set(event.target.getVideoData().title);
+    console.log('Player ready:', event.target.getVideoData().title);
     // Auto-set title from video if current title is default
     this.ngZone.run(() => {
       const videoData = event.target.getVideoData();
@@ -209,13 +213,14 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     // R6.1: Logic to handle looping transitions here
     console.log('Player state changed:', event.data);
     if (event.data === (window as any).YT.PlayerState.PLAYING) {
-      this.setToggleState(true);
-      // this.toggleState();
+      this.setVideoState(true);
+      // this.toggleVideoState();
     } else if (event.data === (window as any).YT.PlayerState.PAUSED) {
-      this.setToggleState(false);
+      this.setVideoState(false);
     } else if (event.data === (window as any).YT.PlayerState.ENDED) {
-      this.setToggleState(false);
+      this.setVideoState(false);
     }
+    console.log('Player state changed:', event.target.getVideoData().title);
     // Also update title if we just loaded a new video or started playing
     if (event.data === (window as any).YT.PlayerState.PLAYING || event.data === (window as any).YT.PlayerState.PAUSED || event.data === (window as any).YT.PlayerState.CUED) {
       this.ngZone.run(() => {
@@ -423,7 +428,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       this.player.seekTo(startTime, true);
       this.player.setPlaybackRate(this.playbackRate);
       this.player.playVideo();
-      this.setToggleState(true);
+      this.setVideoState(true);
     } catch (e) {
       console.warn('YouTube player not ready', e);
     }
@@ -481,7 +486,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     if (this.player) {
       try {
         this.player.pauseVideo();
-        this.setToggleState(false);
+        this.setVideoState(false);
       } catch (e) {
         // ignore
       }

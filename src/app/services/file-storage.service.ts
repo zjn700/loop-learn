@@ -138,14 +138,19 @@ export class FileStorageService {
         return await this.readFile(file);
     }
 
+    private sanitizeFilename(name: string): string {
+        return name.replace(/[<>:"\/\\|?*]/g, '-');
+    }
+
     /**
      * Save to the current directory with the given filename (title).
      */
     async saveToFolder(filename: string, data: LoopList): Promise<void> {
         if (!this._directoryHandle) throw new Error('No folder selected');
 
-        // Ensure .json extension
-        const name = filename.endsWith('.json') ? filename : `${filename}.json`;
+        // Sanitize and ensure .json extension
+        const safeName = this.sanitizeFilename(filename);
+        const name = safeName.endsWith('.json') ? safeName : `${safeName}.json`;
 
         // Create/Update file in the directory
         const fileHandle = await this._directoryHandle.getFileHandle(name, { create: true });
@@ -158,7 +163,8 @@ export class FileStorageService {
 
     async saveFile(data: LoopList, suggestedName: string = 'loop-list'): Promise<void> {
         const jsonStr = JSON.stringify(data, null, 2);
-        const fileName = suggestedName.endsWith('.json') ? suggestedName : `${suggestedName}.json`;
+        const safeName = this.sanitizeFilename(suggestedName);
+        const fileName = safeName.endsWith('.json') ? safeName : `${safeName}.json`;
 
         try {
             if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {

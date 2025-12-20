@@ -17,7 +17,7 @@
 
       <div id="youtube-player-embed" class="w-full aspect-video rounded-lg overflow-hidden"></div>
 
-      <button mat-icon-button (click)="toggleState()">
+      <button mat-icon-button (click)="toggleVideoState()">
         <mat-icon>{{ isToggled ? 'pause' : 'play_arrow'}}</mat-icon>
       </button>
 
@@ -51,19 +51,21 @@
       <button mat-raised-button color="warn" (click)="addLoop()" [disabled]="currentEndTime <= currentStartTime">
         <mat-icon>add_circle_outline</mat-icon> Add Loop
       </button>
+
+      <div class="mt-4 flex items-center space-x-3">
+        <label for="speed-select" class="text-sm font-medium">Speed:</label>
+        <select id="speed-select" (change)="updatePlaybackRate($event)" [ngModel]="playbackRate"
+          class="p-2 border rounded-lg shadow-sm">
+          <option value="0.75">0.75x</option>
+          <option value="1.0">1.0x (Normal)</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+          <option value="2.0">2.0x</option>
+        </select>
+      </div>
     </div>
 
-    <div class="mt-4 flex items-center space-x-3">
-      <label for="speed-select" class="text-sm font-medium">Speed:</label>
-      <select id="speed-select" (change)="updatePlaybackRate($event)" [ngModel]="playbackRate"
-        class="p-2 border rounded-lg shadow-sm">
-        <option value="0.75">0.75x</option>
-        <option value="1.0">1.0x (Normal)</option>
-        <option value="1.25">1.25x</option>
-        <option value="1.5">1.5x</option>
-        <option value="2.0">2.0x</option>
-      </select>
-    </div>
+
 
     <div class="mt-4 h-2 bg-gray-200 rounded-full relative"></div>
   </div>
