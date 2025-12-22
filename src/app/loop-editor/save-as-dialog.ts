@@ -13,7 +13,7 @@ import { MatButtonModule } from '@angular/material/button';
     <h3 mat-dialog-title>Save List As</h3>
     <div mat-dialog-content>
       <mat-form-field style="width:100%">
-        <input matInput [(ngModel)]="data.name" placeholder="List name" />
+        <textarea matInput [(ngModel)]="data.name" placeholder="List name" rows="3"></textarea>
       </mat-form-field>
     </div>
     <div mat-dialog-actions style="justify-content:flex-end">
@@ -26,7 +26,7 @@ export class SaveAsDialogComponent {
   constructor(
     public dialogRef: MatDialogRef<SaveAsDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: { name: string }
-  ) {}
+  ) { }
 
   onSave() {
     this.dialogRef.close(this.data.name?.trim() || null);

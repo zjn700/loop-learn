@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, NgZone, HostListener, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, signal, computed, WritableSignal } from '@angular/core';
 import { DecimalPipe, NgIf, NgFor } from '@angular/common';
 import { YouTubePlayerModule } from '@angular/youtube-player';
 import { Loop, LoopList } from '../models/loop';
@@ -10,13 +10,17 @@ import { FormsModule } from '@angular/forms';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatRadioModule } from '@angular/material/radio';
+import { MatSliderModule } from '@angular/material/slider';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { MatDialog } from '@angular/material/dialog';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
+import { AddVideoDialogComponent } from './add-video-dialog';
 import { SaveAsDialogComponent } from './save-as-dialog';
 import { FileStorageService } from '../services/file-storage.service';
 
@@ -31,6 +35,7 @@ import { FileStorageService } from '../services/file-storage.service';
     MatFormFieldModule,
     MatSlideToggleModule,
     MatSelectModule,
+    MatMenuModule,
     MatButtonModule,
     NgIf,
     NgFor,
@@ -43,110 +48,129 @@ import { FileStorageService } from '../services/file-storage.service';
     MatDialogModule,
     DragDropModule,
     MatCheckboxModule,
+    MatRadioModule,
+    MatSliderModule,
     /* Angular Material Modules, CommonModule, Forms... */
   ],
 })
 export class LoopEditorComponent implements OnInit, OnDestroy {
   // R2.1: Video ID for the player
   // https://youtube.com/shorts/tUpcnX-a3Kk?si=xyPtIj7q1fPUm_97
-  videoId: string = 'jOoEjJjN7QI'; //'epnNIxhKJSc'; //'yXQViZ_6M9o'; // Example ID
-  videoInput: string = ''; // Input for loading new video
+  videoId = signal<string>('jOoEjJjN7QI');
+  // videoInput = signal<string>(''); // Removed as per refactor
   player: any; // YouTube Player instance
 
-  isToggled = false;
+  isToggled = signal(false);
 
   videoState = signal<string>('Paused');
   // vidTitle = signal<string>('zuul');
 
   toggleVideoState() {
-    this.isToggled = !this.isToggled;
-    if (this.isToggled) {
+    this.isToggled.update(v => !v);
+    if (this.isToggled()) {
       this.player.playVideo();
       this.videoState.set('Playing');
     } else {
       this.player.pauseVideo();
       this.videoState.set('Paused');
     }
-    console.log('1 Toggle state:', this.isToggled);
+    console.log('1 Toggle state:', this.isToggled());
     console.log('1 Video state:', this.videoState());
   }
   setVideoState(state: boolean) {
-    this.isToggled = state;
+    this.isToggled.set(state);
     this.videoState.set(state ? 'Playing' : 'Paused');
     console.log('2 Video state:', this.videoState());
-    console.log('2 Toggle state:', this.isToggled);
+    console.log('2 Toggle state:', this.isToggled());
   }
 
   // R6.3: Playback speed control
-  playbackRate: number = 1.0;
+  playbackRate = signal<number>(1.0);
+  skipDuration = signal<number>(0.5);
+
+  updateSkipDuration(event: Event): void {
+    const target = event.target as HTMLSelectElement | null;
+    if (!target) return;
+    this.skipDuration.set(Number(target.value));
+  }
 
   // R2.3: Current Loop List data
-  currentList: LoopList = {
+  currentList = signal<LoopList>({
     id: 'temp-1', // Temporary ID
     ownerId: 'user-123',
     title: 'New Language Practice',
-    // title: this.vidTitle(),
     description: '',
-    videoId: this.videoId,
-    videoUrl: `https://youtu.be/${this.videoId}`,
+    videoId: this.videoId(),
+    videoUrl: `https://youtu.be/${this.videoId()}`,
     isPublic: false,
     language: '',
     skillLevel: '',
     createdAt: new Date(),
     updatedAt: new Date(),
     loops: [] as Loop[],
-  };
+  });
 
   // R3.2: Loop boundary variables
-  currentStartTime: number = 0;
-  currentEndTime: number = 0;
+  currentStartTime = signal<number>(0);
+  currentEndTime = signal<number>(0);
 
   // Playback loop state
-  playingLoopIndex: number | null = null; // index of the loop currently playing
+  playingLoopIndex = signal<number | null>(null); // index of the loop currently playing
   // For expanded loop, we might not track a single index, but we need to know we are playing custom range
-  isPlayingExpanded: boolean = false;
+  isPlayingExpanded = signal(false);
 
   // Expanded Loop Sequence State
-  playQueue: Loop[] = [];
-  currentQueueIndex: number = 0;
+  playQueue = signal<Loop[]>([]);
+  currentQueueIndex = signal<number>(0);
 
 
-  isLooping: boolean = false; // whether the current playback should loop
+  isLooping = signal(false); // whether the current playback should loop
 
 
   // Selection State
-  selectedLoops: Set<number> = new Set();
+  selectedLoops = signal<Set<number>>(new Set());
 
   constructor(
     private snackBar: MatSnackBar,
     private dialog: MatDialog,
-    private fileStorage: FileStorageService,
-    private ngZone: NgZone
+    private fileStorage: FileStorageService
   ) { }
 
   // open save-as dialog using MatDialog
   openSaveAsDialog(): void {
     const ref = this.dialog.open(SaveAsDialogComponent, {
-      width: '320px',
-      data: { name: this.currentList.title || '' },
+      width: '400px',
+      data: { name: this.currentList().title || '' },
     });
-    console.log('Save as dialog opened', this.currentList.title);
+    console.log('Save as dialog opened', this.currentList().title);
 
     ref.afterClosed().subscribe((name?: string) => {
       if (!name) return;
-      this.ngZone.run(() => {
-        this.currentList.title = name; // Update current list title
-        this.saveToLibrary(); // Save to library with the new title
-      });
+      this.currentList.update(l => ({ ...l, title: name })); // Update current list title
+      this.saveToLibrary(); // Save to library with the new title
     });
   }
+
+  openAddVideoDialog(): void {
+    const ref = this.dialog.open(AddVideoDialogComponent, {
+      width: '400px',
+      data: { videoId: '' },
+    });
+
+    ref.afterClosed().subscribe((id?: string) => {
+      if (id) {
+        this.loadVideo(id);
+      }
+    });
+  }
+
   private _loopChecker: any = null; // interval id for checking loop end
 
 
   // Library / Folder State
-  libraryFiles: { name: string; handle: any }[] = [];
-  isLibraryAccessGranted: boolean = false;
-  hasLibraryFolder: boolean = false;
+  libraryFiles = signal<{ name: string; handle: any }[]>([]);
+  isLibraryAccessGranted = signal(false);
+  hasLibraryFolder = signal(false);
 
   // Autosave
   private saveSubject = new Subject<void>();
@@ -181,7 +205,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
         this.player = new (window as any).YT.Player('youtube-player-embed', {
           height: '400',
           width: '100%',
-          videoId: this.videoId,
+          videoId: this.videoId(),
           playerVars: {
             playsinline: 1,
             controls: 0,
@@ -197,18 +221,16 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
   onPlayerReady(event: any): void {
     // R6.3: Set initial playback speed
-    event.target.setPlaybackRate(this.playbackRate);
+    event.target.setPlaybackRate(this.playbackRate());
     // this.vidTitle.set(event.target.getVideoData().title);
     console.log('Player ready title:', event.target.getVideoData().title);
     // Auto-set title from video if current title is default
-    this.ngZone.run(() => {
-      const videoData = event.target.getVideoData();
-      if (videoData && videoData.title) {
-        if (!this.currentList.title || this.currentList.title === 'New Language Practice') {
-          this.currentList.title = videoData.title;
-        }
+    const videoData = event.target.getVideoData();
+    if (videoData && videoData.title) {
+      if (!this.currentList().title || this.currentList().title === 'New Language Practice') {
+        this.currentList.update(l => ({ ...l, title: videoData.title }));
       }
-    });
+    }
   }
 
   onPlayerStateChange(event: any): void {
@@ -225,23 +247,22 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     console.log('Player state changed:', event.target.getVideoData().title);
     // Also update title if we just loaded a new video or started playing
     if (event.data === (window as any).YT.PlayerState.PLAYING || event.data === (window as any).YT.PlayerState.PAUSED || event.data === (window as any).YT.PlayerState.CUED) {
-      this.ngZone.run(() => {
-        const videoData = event.target.getVideoData();
-        if (videoData && videoData.title) {
-          if (!this.currentList.title || this.currentList.title === 'New Language Practice' || this.currentList.title === '') {
-            this.currentList.title = videoData.title;
-          }
+      const videoData = event.target.getVideoData();
+      console.log('videoData title:', videoData.title, 'currentList title:', this.currentList().title);
+      if (videoData && videoData.title) {
+        if (!this.currentList().title || this.currentList().title === 'New Language Practice' || this.currentList().title === '') {
+          this.currentList.update(l => ({ ...l, title: videoData.title }));
         }
-      });
+      }
     }
   }
 
   /** Load a video from the input URL or ID */
-  async loadVideo(): Promise<void> {
-    if (!this.videoInput) return;
-
+  async loadVideo(videoIdInput: string): Promise<void> {
+    if (!videoIdInput) return;
+    // console.log('Loading video', this.videoInput());
     // Parse ID
-    let id = this.videoInput.trim();
+    let id = videoIdInput.trim();
     const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
     const match = id.match(regExp);
     if (match && match[2].length === 11) {
@@ -253,26 +274,26 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // 1. CLEAR INPUT
-    this.videoInput = '';
+    // 1. (Cleared via Dialog)
 
     // 2. CHECK LIBRARY FOR EXISTING FILE
-    if (this.isLibraryAccessGranted) {
+    if (this.isLibraryAccessGranted()) {
       const existingFile = await this.scanLibraryForVideoId(id);
       if (existingFile) {
-        this.ngZone.run(async () => {
-          this.snackBar.open('Found existing loops for this video', '', { duration: 2500 });
-          await this.loadFromLibrary(existingFile);
-        });
+        this.snackBar.open('Found existing loops for this video', '', { duration: 2500 });
+        await this.loadFromLibrary(existingFile);
         return;
       }
     }
 
     // 3. NOT FOUND -> LOAD NEW
-    this.videoId = id;
+    // 3. NOT FOUND -> LOAD NEW
+    this.resetEditorState();
+
+    this.videoId.set(id);
 
     // Reset current list for the new video
-    this.currentList = {
+    this.currentList.set({
       id: crypto.randomUUID(), // or Date.now().toString()
       ownerId: 'user-123',
       title: '', // Pending fetch from player
@@ -285,12 +306,13 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       createdAt: new Date(),
       updatedAt: new Date(),
       loops: [],
-    };
+    });
 
 
     // Update player
     if (this.player && this.player.loadVideoById) {
       this.player.loadVideoById(id);
+      // console.log('Loaded video', id);
     }
 
     this.snackBar.open('There are no loops yet for this video. You can create one now', 'OK', { duration: 5000 });
@@ -298,7 +320,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
   async scanLibraryForVideoId(videoId: string): Promise<any | null> {
     // Brute-force scan of small libraries
-    for (const fileItem of this.libraryFiles) {
+    for (const fileItem of this.libraryFiles()) {
       try {
         const data = await this.fileStorage.loadFile(fileItem.handle);
         if (data.videoId === videoId) {
@@ -313,32 +335,37 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
   /** R3.2: Sets the loop start time to the current video time. */
   setStartTime(): void {
-    this.currentStartTime = this.player.getCurrentTime();
-    console.log(`Start Time set: ${this.currentStartTime}`);
+    this.currentStartTime.set(this.player.getCurrentTime());
+    console.log(`Start Time set: ${this.currentStartTime()}`);
   }
 
   /** R3.2: Sets the loop end time to the current video time. */
   setEndTime(): void {
-    this.currentEndTime = this.player.getCurrentTime();
-    console.log(`End Time set: ${this.currentEndTime}`);
+    this.currentEndTime.set(this.player.getCurrentTime());
+    console.log(`End Time set: ${this.currentEndTime()}`);
   }
 
   /** R2.4: Saves the defined loop to the list */
   addLoop(): void {
-    if (this.currentEndTime > this.currentStartTime && this.currentStartTime >= 0) {
-      const newLoop: Loop = {
-        loopIndex: this.currentList.loops.length,
-        name: `Loop ${this.currentList.loops.length + 1}`,
-        startTime: this.currentStartTime,
-        endTime: this.currentEndTime,
-        primaryText: '',
-        secondaryText: '',
-      };
-      this.currentList.loops.push(newLoop);
+    const start = this.currentStartTime();
+    const end = this.currentEndTime();
+    if (end > start && start >= 0) {
+      this.currentList.update(list => {
+        const newLoop: Loop = {
+          loopIndex: list.loops.length,
+          name: `Loop ${list.loops.length + 1}`,
+          startTime: start,
+          endTime: end,
+          primaryText: '',
+          secondaryText: '',
+        };
+        list.loops.push(newLoop); // Mutating array inside object, then returning object to update signal
+        return { ...list }; // Trigger signal update with shallow copy logic
+      });
       this.markListChanged();
       // Reset times for next loop definition
-      this.currentStartTime = 0;
-      this.currentEndTime = 0;
+      this.currentStartTime.set(0);
+      this.currentEndTime.set(0);
     } else {
       alert('End time must be greater than start time.');
     }
@@ -348,29 +375,29 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   updatePlaybackRate(event: Event): void {
     const target = event.target as HTMLSelectElement | null;
     if (!target) return;
-    this.playbackRate = Number(target.value);
+    this.playbackRate.set(Number(target.value));
     if (this.player) {
-      this.player.setPlaybackRate(this.playbackRate);
+      this.player.setPlaybackRate(this.playbackRate());
     }
   }
 
   /** Play a loop by its index. If `loopForever` is true, it will repeatedly loop. */
   playLoop(loopIndex: number, loopForever: boolean = false): void {
-    const loop = this.currentList.loops[loopIndex];
+    const loop = this.currentList().loops[loopIndex];
     if (!loop || !this.player) return;
 
-    this.playingLoopIndex = loopIndex;
-    this.isPlayingExpanded = false;
+    this.playingLoopIndex.set(loopIndex);
+    this.isPlayingExpanded.set(false);
     this._playRange(loop.startTime, loop.endTime, loopForever);
   }
 
   /** Play expanded loop from selected loops */
   playExpandedLoop(): void {
-    if (this.selectedLoops.size === 0) return;
+    if (this.selectedLoops().size === 0) return;
 
     // Get selected loops and sort them by index to ensure correct order
-    const indices = Array.from(this.selectedLoops).sort((a, b) => a - b);
-    const loops = this.currentList.loops.filter((_, i) => indices.includes(i));
+    const indices = Array.from(this.selectedLoops()).sort((a, b) => a - b);
+    const loops = this.currentList().loops.filter((_, i) => indices.includes(i));
 
     // Safety check: ensure loops are sorted by index effectively
     loops.sort((a, b) => a.loopIndex - b.loopIndex);
@@ -378,12 +405,12 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     if (loops.length === 0) return;
 
     // Setup Sequence
-    this.playQueue = loops;
-    this.currentQueueIndex = 0;
+    this.playQueue.set(loops);
+    this.currentQueueIndex.set(0);
 
-    this.playingLoopIndex = null;
-    this.isPlayingExpanded = true;
-    this.isLooping = true; // Expanded mode loops the whole sequence forever
+    this.playingLoopIndex.set(null);
+    this.isPlayingExpanded.set(true);
+    this.isLooping.set(true); // Expanded mode loops the whole sequence forever
 
     this._playSequenceItem();
   }
@@ -391,18 +418,18 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   /** Stop expanded loop and clear selection */
   stopExpandedLoop(): void {
     this.stopLoop();
-    this.selectedLoops.clear();
-    this.playQueue = [];
-    this.currentQueueIndex = 0;
+    this.selectedLoops.set(new Set());
+    this.playQueue.set([]);
+    this.currentQueueIndex.set(0);
   }
 
   private _playSequenceItem(): void {
-    if (this.currentQueueIndex >= this.playQueue.length) {
+    if (this.currentQueueIndex() >= this.playQueue().length) {
       // Sequence finished, loop back to start
-      this.currentQueueIndex = 0;
+      this.currentQueueIndex.set(0);
     }
 
-    const loop = this.playQueue[this.currentQueueIndex];
+    const loop = this.playQueue()[this.currentQueueIndex()];
     if (!loop) return;
 
     // Use a specialized checker for the sequence item
@@ -420,15 +447,15 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     // However, we need to distinguish between "Single Loop Repeating" and "Expanded Sequence Repeating".
     // inner isLooping state is used by the checker.
 
-    if (!this.isPlayingExpanded) {
-      this.isLooping = !!loopForever;
+    if (!this.isPlayingExpanded()) {
+      this.isLooping.set(!!loopForever);
     }
     // If expanded, we handle logic in checker.
 
     // Seek to start and play
     try {
       this.player.seekTo(startTime, true);
-      this.player.setPlaybackRate(this.playbackRate);
+      this.player.setPlaybackRate(this.playbackRate());
       this.player.playVideo();
       this.setVideoState(true);
     } catch (e) {
@@ -448,16 +475,16 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
       // If we've reached or passed the end time
       if (t >= endTime) {
-        if (this.isPlayingExpanded) {
+        if (this.isPlayingExpanded()) {
           // Sequence Logic: Move to next item
-          this.currentQueueIndex++;
+          this.currentQueueIndex.update(i => i + 1);
           this._playSequenceItem();
-        } else if (this.isLooping) {
+        } else if (this.isLooping()) {
           // Standard Single Loop Logic: Seek back to start
           this.player.seekTo(startTime, true);
-          this.player.setPlaybackRate(this.playbackRate);
+          this.player.setPlaybackRate(this.playbackRate());
           this.player.seekTo(startTime, true);
-          this.player.setPlaybackRate(this.playbackRate);
+          this.player.setPlaybackRate(this.playbackRate());
           this.player.playVideo();
         } else {
           // Stop playback
@@ -468,15 +495,18 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   }
 
   toggleLoopSelection(index: number): void {
-    if (this.selectedLoops.has(index)) {
-      this.selectedLoops.delete(index);
-    } else {
-      this.selectedLoops.add(index);
-    }
+    this.selectedLoops.update(set => {
+      if (set.has(index)) {
+        set.delete(index);
+      } else {
+        set.add(index);
+      }
+      return new Set(set); // Return new set to trigger change
+    });
   }
 
   isLoopSelected(index: number): boolean {
-    return this.selectedLoops.has(index);
+    return this.selectedLoops().has(index);
   }
 
   /** Stop any loop playback in progress. */
@@ -493,16 +523,19 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
         // ignore
       }
     }
-    this.playingLoopIndex = null;
-    this.isPlayingExpanded = false;
-    this.isLooping = false;
-    this.playQueue = [];
-    this.currentQueueIndex = 0;
+    this.playingLoopIndex.set(null);
+    this.isPlayingExpanded.set(false);
+    this.isLooping.set(false);
+    this.playQueue.set([]);
+    this.currentQueueIndex.set(0);
   }
 
   deleteLoop(index: number): void {
-    if (index >= 0 && index < this.currentList.loops.length) {
-      this.currentList.loops.splice(index, 1);
+    if (index >= 0 && index < this.currentList().loops.length) {
+      this.currentList.update(l => {
+        l.loops.splice(index, 1);
+        return { ...l };
+      });
       this.reindexLoops();
       this.markListChanged();
       this.snackBar.open('Loop deleted', '', { duration: 1000 });
@@ -510,14 +543,20 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   }
 
   drop(event: CdkDragDrop<string[]>): void {
-    moveItemInArray(this.currentList.loops, event.previousIndex, event.currentIndex);
+    this.currentList.update(l => {
+      moveItemInArray(l.loops, event.previousIndex, event.currentIndex);
+      return { ...l };
+    });
     this.reindexLoops();
     this.markListChanged();
   }
 
   private reindexLoops(): void {
-    this.currentList.loops.forEach((loop, i) => {
-      loop.loopIndex = i;
+    this.currentList.update(l => {
+      l.loops.forEach((loop, i) => {
+        loop.loopIndex = i;
+      });
+      return { ...l };
     });
   }
 
@@ -531,6 +570,31 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     this.saveSubject.next();
   }
 
+  // --- Template Helpers ---
+  updateListTitle(title: string): void {
+    this.currentList.update(l => ({ ...l, title }));
+    this.markListChanged();
+  }
+
+  updateListPublic(isPublic: boolean): void {
+    this.currentList.update(l => ({ ...l, isPublic }));
+    this.markListChanged();
+  }
+
+  updateListLanguage(language: string): void {
+    this.currentList.update(l => ({ ...l, language }));
+    this.markListChanged();
+  }
+
+  // --- Helper to Reset State ---
+  resetEditorState(): void {
+    this.stopLoop();
+    this.selectedLoops.set(new Set()); // Clear selection
+    this.playQueue.set([]); // Clear queue
+    this.currentQueueIndex.set(0); // Reset queue index
+    // Note: We do NOT reset currentList here, as it will be set by the caller (loadVideo or loadList)
+  }
+
   // --- Folder / Library Logic ---
 
   async initLibrary(): Promise<void> {
@@ -538,13 +602,14 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
     // Check if we have a stored handle
     const restored = await this.fileStorage.restoreDirectoryHandle();
-    this.hasLibraryFolder = restored;
+    this.hasLibraryFolder.set(restored);
 
     if (restored) {
       // We have a handle, but need to verify permissions
       // We cannot prompt immediately on init (needs gesture), so we check 'read'
-      this.isLibraryAccessGranted = await this.fileStorage.verifyPermission(false);
-      if (this.isLibraryAccessGranted) {
+      const granted = await this.fileStorage.verifyPermission(false);
+      this.isLibraryAccessGranted.set(granted);
+      if (granted) {
         this.refreshLibrary();
       }
     }
@@ -553,12 +618,11 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   async selectLibraryFolder(): Promise<void> {
     try {
       await this.fileStorage.selectBaseFolder();
-      this.ngZone.run(async () => {
-        this.hasLibraryFolder = true;
-        this.isLibraryAccessGranted = true;
-        await this.refreshLibrary();
-        this.snackBar.open('Library folder selected', '', { duration: 2000 });
-      });
+      this.hasLibraryFolder.set(true);
+      this.isLibraryAccessGranted.set(true);
+      await this.refreshLibrary();
+      this.snackBar.open('Library folder selected', '', { duration: 2000 });
+
     } catch (e: any) {
       if (e.name !== 'AbortError') {
         console.error('Select folder failed', e);
@@ -570,14 +634,14 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   async verifyLibraryPermission(): Promise<void> {
     try {
       const granted = await this.fileStorage.verifyPermission(true);
-      this.ngZone.run(() => {
-        this.isLibraryAccessGranted = granted;
-        if (granted) {
-          this.refreshLibrary();
-        } else {
-          this.snackBar.open('Permission denied', 'OK');
-        }
-      });
+
+      this.isLibraryAccessGranted.set(granted);
+      if (granted) {
+        this.refreshLibrary();
+      } else {
+        this.snackBar.open('Permission denied', 'OK');
+      }
+
     } catch (e) {
       console.error('Verify permission failed', e);
     }
@@ -585,31 +649,23 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
   async refreshLibrary(): Promise<void> {
     try {
-      this.libraryFiles = await this.fileStorage.getFiles();
-      this.ngZone.run(() => {
-        // just to be sure change detection runs even if getFiles finished quickly
-      });
+      const files = await this.fileStorage.getFiles();
+      this.libraryFiles.set(files);
     } catch (e) {
       console.error('Failed to list files', e);
-      this.ngZone.run(() => {
-        this.libraryFiles = [];
-      });
+      this.libraryFiles.set([]);
     }
   }
 
   async loadFromLibrary(fileItem: any): Promise<void> {
     try {
       const data = await this.fileStorage.loadFile(fileItem.handle);
-      this.ngZone.run(() => {
-        this.loadList(data);
-      });
+      this.loadList(data);
       // Update Title to match filename (minus .json) if needed?
       // Or keep internal title. Let's keep internal title but maybe suggest filename on save.
     } catch (e) {
       console.error('Failed to load file', e);
-      this.ngZone.run(() => {
-        this.snackBar.open('Failed to load file', 'OK');
-      });
+      this.snackBar.open('Failed to load file', 'OK');
     }
   }
 
@@ -620,7 +676,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     }
 
     // use current title as filename
-    const filename = this.currentList.title.trim() || 'Untitled';
+    const filename = this.currentList().title.trim() || 'Untitled';
 
     try {
       // Ensure we have write permission
@@ -631,13 +687,11 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       }
 
       // Update timestamp
-      this.currentList.updatedAt = new Date();
+      this.currentList.update(l => ({ ...l, updatedAt: new Date() }));
 
-      await this.fileStorage.saveToFolder(filename, this.currentList);
-      this.ngZone.run(() => {
-        this.snackBar.open('Saved to Library', '', { duration: 2000 });
-        this.refreshLibrary(); // refresh list in case it's a new file
-      });
+      await this.fileStorage.saveToFolder(filename, this.currentList());
+      this.snackBar.open('Saved to Library', '', { duration: 2000 });
+      this.refreshLibrary(); // refresh list in case it's a new file
     } catch (e) {
       console.error('Failed to save to library', e);
       this.snackBar.open('Failed to save', 'OK');
@@ -654,31 +708,25 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       // Fallback (Safari): Prompt for name first
       const ref = this.dialog.open(SaveAsDialogComponent, {
         width: '320px',
-        data: { name: this.currentList.title || '' },
+        data: { name: this.currentList().title || '' },
       });
       ref.afterClosed().subscribe(async (name?: string) => {
         if (!name) return;
-        this.ngZone.run(async () => {
-          this.currentList.title = name;
-          try {
-            await this.fileStorage.saveFile(this.currentList, name);
-            this.ngZone.run(() => {
-              this.snackBar.open('File downloaded', '', { duration: 2000 });
-            });
-          } catch (e) {
-            console.error('Save file failed', e);
-          }
-        });
+        this.currentList.update(l => ({ ...l, title: name }));
+        try {
+          await this.fileStorage.saveFile(this.currentList(), name);
+          this.snackBar.open('File downloaded', '', { duration: 2000 });
+        } catch (e) {
+          console.error('Save file failed', e);
+        }
       });
       return;
     }
 
     // Native File System API Supported
     try {
-      await this.fileStorage.saveFile(this.currentList, this.currentList.title || 'loop-list');
-      this.ngZone.run(() => {
-        this.snackBar.open('File saved', '', { duration: 2000 });
-      });
+      await this.fileStorage.saveFile(this.currentList(), this.currentList().title || 'loop-list');
+      this.snackBar.open('File saved', '', { duration: 2000 });
     } catch (e) {
       console.error('Save file failed', e);
       this.snackBar.open('Failed to save file', 'OK');
@@ -689,9 +737,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     if (this.isFileAccessSupported) {
       const data = await this.fileStorage.openFile();
       if (data) {
-        this.ngZone.run(() => {
-          this.loadList(data);
-        });
+        this.loadList(data);
       }
     } else {
       // Trigger hidden input click
@@ -705,11 +751,9 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     if (!file) return;
     try {
       const data = await this.fileStorage.readFile(file);
-      this.ngZone.run(() => {
-        this.loadList(data);
-        // Reset input
-        event.target.value = '';
-      });
+      this.loadList(data);
+      // Reset input
+      event.target.value = '';
     } catch (e) {
       console.error('Read file failed', e);
       this.snackBar.open('Failed to read file', 'OK');
@@ -717,16 +761,19 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   }
 
   private loadList(data: LoopList): void {
-    this.currentList = data;
+    this.resetEditorState();
+    this.currentList.set(data);
     if (data.videoId) {
-      this.videoId = data.videoId;
+      this.videoId.set(data.videoId);
       // Load the video in the player
       if (this.player && this.player.loadVideoById) {
-        this.player.loadVideoById(this.videoId);
+        this.player.loadVideoById(this.videoId());
       }
+      // console.log('Loaded video', this.videoId());
     }
     // Reset player state if needed, or just let user play
     this.snackBar.open('List loaded from file', '', { duration: 2000 });
+    console.log('Loaded list', this.currentList());
   }
 
   @HostListener('window:keydown', ['$event'])
@@ -738,10 +785,11 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     }
 
     if (event.key === 'ArrowLeft') {
-      this.adjustTime(-0.1);
+      // this.adjustTime(-0.1);
+      this.adjustTime(-this.skipDuration());
       event.preventDefault(); // Prevent scrolling if needed
     } else if (event.key === 'ArrowRight') {
-      this.adjustTime(0.1);
+      this.adjustTime(this.skipDuration());
       event.preventDefault();
     }
   }

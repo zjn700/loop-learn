@@ -1,68 +1,118 @@
 <div class="p-6 bg-gray-50 min-h-screen">
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
     <div class="lg:col-span-2 bg-white rounded-xl shadow-lg p-4">
-      <h1 class="text-2xl font-bold mb-4">Create & Edit Loop List</h1>
-
-      <div class="mb-4 flex space-x-2">
-        <mat-form-field class="w-full" appearance="outline">
-          <label class="text-sm font-mono text-gray-500">YouTube URL or Video ID</label>
-          <!-- <mat-label>YouTube URL or Video ID</mat-label> -->
-          <input matInput [(ngModel)]="videoInput" (keyup.enter)="loadVideo()"
-            placeholder="e.g. https://youtu.be/..." />
-          <button mat-icon-button matSuffix (click)="loadVideo()" [disabled]="!videoInput">
-            <mat-icon>arrow_forward</mat-icon>
-          </button>
-        </mat-form-field>
+      <div class="flex items-center mb-4 space-x-2">
+        <button mat-icon-button [matMenuTriggerFor]="mainMenu">
+          <mat-icon>menu</mat-icon>
+        </button>
+        <h1 class="text-2xl font-bold m-0 flex items-center">
+          <img src="logo.png" alt="Logo" class="h-9 mr-2 rounded">
+          Loop Learner
+        </h1>
+        <h3> {{ currentList().title }}</h3>
       </div>
 
-      <div id="youtube-player-embed" class="w-full aspect-video rounded-lg overflow-hidden"></div>
+      <mat-menu #mainMenu="matMenu">
+        <button mat-menu-item>
+          <mat-icon>list</mat-icon>
+          <span>Show saved loop lists</span>
+        </button>
+        <button mat-menu-item (click)="openAddVideoDialog()">
+          <mat-icon>video_library</mat-icon>
+          <span>Add a video</span>
+        </button>
+        <button mat-menu-item>
+          <mat-icon>edit</mat-icon>
+          <span>Create or edit a loop list</span>
+        </button>
+        <button mat-menu-item>
+          <mat-icon>settings</mat-icon>
+          <span>Settings</span>
+        </button>
+      </mat-menu>
 
-      <button mat-icon-button (click)="toggleVideoState()">
-        <mat-icon>{{ isToggled ? 'pause' : 'play_arrow'}}</mat-icon>
-      </button>
+
+
+      <div id="youtube-player-embed" class="w-full aspect-video rounded-lg overflow-hidden"></div>
+      <div class="flex flex-wrap items-center justify-between mt-2">
+        <div class="flex items-center">
+          <button mat-icon-button (click)="adjustTime(-skipDuration())">
+            <mat-icon style="transform: scale(1.5);">fast_rewind</mat-icon>
+          </button>
+          <button style="transform: scale(1.5);" mat-icon-button (click)="toggleVideoState()">
+            <mat-icon>{{ isToggled() ? 'pause' : 'play_arrow'}}</mat-icon>
+          </button>
+          <button mat-icon-button (click)="adjustTime(skipDuration())">
+            <mat-icon style="transform: scale(1.5);">fast_forward</mat-icon>
+          </button>
+        </div>
+
+        <div class="flex items-center space-x-4">
+          <div class="flex items-center space-x-2">
+            <label for="speed-select" class="text-xs font-medium text-gray-600">Speed</label>
+            <select id="speed-select" (change)="updatePlaybackRate($event)" [ngModel]="playbackRate()"
+              class="p-1 border rounded shadow-sm text-sm">
+              <option value="0.75">0.75x</option>
+              <option value="1.0">1.0x</option>
+              <option value="1.25">1.25x</option>
+              <option value="1.5">1.5x</option>
+              <option value="2.0">2.0x</option>
+            </select>
+          </div>
+
+          <div class="flex items-center space-x-2">
+            <label for="skip-select" class="text-xs font-medium text-gray-600">Skip</label>
+            <select id="skip-select" (change)="updateSkipDuration($event)" [ngModel]="skipDuration()"
+              class="p-1 border rounded shadow-sm text-sm">
+              <option value="0.1">0.1s</option>
+              <option value="0.5">0.5s</option>
+              <option value="1">1s</option>
+              <option value="5">5s</option>
+              <option value="10">10s</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
       <p>{{ videoState() }}</p>
+      <!-- <p>{{ videoDuration() }}</p> -->
+      <!-- <button mat-icon-button (click)="adjustTime(-0.1)">
+        <mat-icon style="transform: scale(1.5);">fast_rewind</mat-icon>
+      </button> -->
+      <!-- <mat-radio-group class="p5 m-4 pb-100" aria-label="Select an option">
+
+        <mat-radio-button value="0.1">0.1</mat-radio-button>
+        <mat-radio-button value="0.5">O.5</mat-radio-button>
+        <mat-radio-button value="1">1</mat-radio-button>
+        <mat-radio-button value="5">5</mat-radio-button>
+
+      </mat-radio-group> -->
 
       <p class="text-lg font-medium">Define Loop:</p>
 
       <!-- <button mat-icon-button (click)="adjustTime(-0.1)" title="-0.1s"> -->
-      <button mat-icon-button (click)="adjustTime(-0.1)">
-        <!-- <p class="text-xs">-0.1s</p> -->
-        <!-- <mat-icon>replay_10</mat-icon> -->
-        <mat-icon style="transform: scale(1.5);">arrow_circle_left_two_tone</mat-icon>
-        <!-- <mat-icon>replay_10</mat-icon> <span class=" text-xs">-0.1</span> -->
-      </button>
 
       <button mat-flat-button color="primary" (click)="setStartTime()">
-        <mat-icon>timer_10</mat-icon> Set Start: {{ currentStartTime | number : '1.1-2' }}s
+        <mat-icon>timer_10</mat-icon> Set Start: {{ currentStartTime() | number : '1.1-2' }}s
       </button>
 
       <button mat-flat-button color="accent" (click)="setEndTime()">
-        <mat-icon>timer</mat-icon> Set End: {{ currentEndTime | number : '1.1-2' }}s
+        <mat-icon>timer</mat-icon> Set End: {{ currentEndTime() | number : '1.1-2' }}s
       </button>
 
-      <button mat-icon-button (click)="adjustTime(0.5)">
-        <!-- <p class="text-xs">+0.1s</p> -->
-        <mat-icon style="transform: scale(1.5);">arrow_circle_right_two_tone</mat-icon>
+      <!-- <button mat-icon-button (click)="adjustTime(0.5)"> -->
+      <!-- <p class="text-xs">+0.1s</p> -->
+      <!-- <mat-icon style="transform: scale(1.5);">arrow_circle_right_two_tone</mat-icon> -->
 
-        <!-- <mat-icon>forward_10</mat-icon> -->
-      </button>
+      <!-- <mat-icon>forward_10</mat-icon> -->
+      <!-- </button> -->
 
-      <button mat-raised-button color="warn" (click)="addLoop()" [disabled]="currentEndTime <= currentStartTime">
+      <button mat-raised-button color="warn" (click)="addLoop()" [disabled]="currentEndTime() <= currentStartTime()">
         <mat-icon>add_circle_outline</mat-icon> Add Loop
       </button>
 
-      <div class="mt-4 flex items-center space-x-3">
-        <label for="speed-select" class="text-sm font-medium">Speed:</label>
-        <select id="speed-select" (change)="updatePlaybackRate($event)" [ngModel]="playbackRate"
-          class="p-2 border rounded-lg shadow-sm">
-          <option value="0.75">0.75x</option>
-          <option value="1.0">1.0x (Normal)</option>
-          <option value="1.25">1.25x</option>
-          <option value="1.5">1.5x</option>
-          <option value="2.0">2.0x</option>
-        </select>
-      </div>
+      <!-- <div class="mt-4 flex items-center space-x-3"> -->
+
     </div>
 
 
@@ -76,20 +126,20 @@
 
       <mat-form-field class="w-full">
         <mat-label>List Title</mat-label>
-        <input matInput [(ngModel)]="currentList.title" (ngModelChange)="markListChanged()" />
+        <input matInput [ngModel]="currentList().title" (ngModelChange)="updateListTitle($event)" />
       </mat-form-field>
 
       <div class="flex justify-between items-center my-3">
         <span class="text-sm font-medium">Public Access (R4.1)</span>
-        <mat-slide-toggle [(ngModel)]="currentList.isPublic" (ngModelChange)="markListChanged()" color="primary">
-          {{ currentList.isPublic ? 'Public' : 'Private' }}
+        <mat-slide-toggle [ngModel]="currentList().isPublic" (ngModelChange)="updateListPublic($event)" color="primary">
+          {{ currentList().isPublic ? 'Public' : 'Private' }}
         </mat-slide-toggle>
       </div>
 
-      <div *ngIf="currentList.isPublic" class="space-y-3">
+      <div *ngIf="currentList().isPublic" class="space-y-3">
         <mat-form-field class="w-full">
           <mat-label>Language</mat-label>
-          <mat-select [(ngModel)]="currentList.language" (ngModelChange)="markListChanged()">
+          <mat-select [ngModel]="currentList().language" (ngModelChange)="updateListLanguage($event)">
           </mat-select>
         </mat-form-field>
       </div>
@@ -105,7 +155,7 @@
         <div class="flex space-x-2 pt-1">
           <button mat-stroked-button color="primary" (click)="openSaveAsDialog()">Save As</button>
           <button *ngIf="isFileAccessSupported" mat-stroked-button (click)="saveToLibrary()"
-            [disabled]="!isLibraryAccessGranted">
+            [disabled]="!isLibraryAccessGranted()">
             Save (Update)
           </button>
         </div>
@@ -118,23 +168,23 @@
             </button>
           </h3>
 
-          <div *ngIf="hasLibraryFolder && !isLibraryAccessGranted" class="p-2 bg-yellow-50 rounded text-sm mb-2">
+          <div *ngIf="hasLibraryFolder() && !isLibraryAccessGranted()" class="p-2 bg-yellow-50 rounded text-sm mb-2">
             <p>Permission needed to access library.</p>
             <button mat-stroked-button color="accent" class="mt-1 w-full" (click)="verifyLibraryPermission()">
               Grant Permission
             </button>
           </div>
 
-          <div *ngIf="hasLibraryFolder && isLibraryAccessGranted">
+          <div *ngIf="hasLibraryFolder() && isLibraryAccessGranted()">
             <div class="flex justify-between items-center mb-1">
-              <span class="text-xs text-gray-500">{{ libraryFiles.length }} files</span>
+              <span class="text-xs text-gray-500">{{ libraryFiles().length }} files</span>
               <button mat-icon-button (click)="refreshLibrary()" title="Refresh List">
                 <mat-icon>refresh</mat-icon>
               </button>
             </div>
             <ul class="space-y-1 max-h-48 overflow-y-auto border rounded p-1">
-              <li *ngIf="libraryFiles.length === 0" class="text-xs text-gray-400 p-1">No JSON files found.</li>
-              <li *ngFor="let file of libraryFiles">
+              <li *ngIf="libraryFiles().length === 0" class="text-xs text-gray-400 p-1">No JSON files found.</li>
+              <li *ngFor="let file of libraryFiles()">
                 <button mat-button class="w-full text-left truncate !justify-start" (click)="loadFromLibrary(file)">
                   <mat-icon class="text-gray-400 !mr-2 text-sm">description</mat-icon>
                   <span class="truncate text-sm">{{ file.name }}</span>
@@ -143,7 +193,7 @@
             </ul>
           </div>
 
-          <div *ngIf="!hasLibraryFolder"
+          <div *ngIf="!hasLibraryFolder()"
             class="p-3 text-center text-sm text-gray-500 border-2 border-dashed rounded-lg cursor-pointer hover:bg-gray-50"
             (click)="selectLibraryFolder()">
             Click to select a folder <br> to serve as your Library.
@@ -154,24 +204,24 @@
 
     <div class="bg-white rounded-xl shadow-lg p-4 scrollbar-thin max-h-96 overflow-y-auto">
       <h2 class="text-xl font-semibold mb-3 border-b pb-2 flex justify-between items-center">
-        <span>Defined Loops ({{ currentList.loops.length }})</span>
-        <div *ngIf="selectedLoops.size > 0" class="flex items-center space-x-2">
-          <span class="text-sm font-medium text-blue-600">{{ selectedLoops.size }} selected</span>
-          <button *ngIf="!isPlayingExpanded" mat-flat-button color="accent" (click)="playExpandedLoop()">
+        <span>Defined Loops ({{ currentList().loops.length }})</span>
+        <div *ngIf="selectedLoops().size > 0" class="flex items-center space-x-2">
+          <span class="text-sm font-medium text-blue-600">{{ selectedLoops().size }} selected</span>
+          <button *ngIf="!isPlayingExpanded()" mat-flat-button color="accent" (click)="playExpandedLoop()">
             <mat-icon>repeat_on</mat-icon> Play selected
           </button>
-          <button *ngIf="isPlayingExpanded" mat-flat-button color="warn" (click)="stopExpandedLoop()">
+          <button *ngIf="isPlayingExpanded()" mat-flat-button color="warn" (click)="stopExpandedLoop()">
             <mat-icon>stop</mat-icon> Stop & Clear
           </button>
         </div>
       </h2>
 
-      <div *ngIf="currentList.loops.length === 0" class="text-gray-500 text-center py-4">
+      <div *ngIf="currentList().loops.length === 0" class="text-gray-500 text-center py-4">
         No loops defined yet. Use the controls above!
       </div>
 
       <div cdkDropList (cdkDropListDropped)="drop($event)" class="bg-white">
-        <div *ngFor="let loop of currentList.loops; let i = index; trackBy: trackByLoopIndex"
+        <div *ngFor="let loop of currentList().loops; let i = index; trackBy: trackByLoopIndex"
           class="border-b py-3 last:border-b-0 bg-white" cdkDrag>
           <!-- Drag Placeholder / Preview Styles could be added here if needed -->
           <div class="custom-placeholder" *cdkDragPlaceholder></div>
@@ -185,17 +235,17 @@
             </div>
             <div class="flex space-x-2 items-center">
               <button mat-icon-button color="primary" title="Play" (click)="playLoop(loop.loopIndex)"
-                [disabled]="playingLoopIndex === loop.loopIndex">
+                [disabled]="playingLoopIndex() === loop.loopIndex">
                 <mat-icon>play_arrow</mat-icon>
               </button>
 
               <button mat-icon-button color="accent" title="Loop" (click)="playLoop(loop.loopIndex, true)"
-                [disabled]="playingLoopIndex === loop.loopIndex && isLooping">
+                [disabled]="playingLoopIndex() === loop.loopIndex && isLooping()">
                 <mat-icon>repeat</mat-icon>
               </button>
 
               <button mat-icon-button color="default" title="Stop" (click)="stopLoop()"
-                [disabled]="playingLoopIndex === null">
+                [disabled]="playingLoopIndex() === null">
                 <mat-icon>stop</mat-icon>
               </button>
 
