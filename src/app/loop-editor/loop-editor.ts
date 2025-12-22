@@ -49,7 +49,7 @@ import { FileStorageService } from '../services/file-storage.service';
 export class LoopEditorComponent implements OnInit, OnDestroy {
   // R2.1: Video ID for the player
   // https://youtube.com/shorts/tUpcnX-a3Kk?si=xyPtIj7q1fPUm_97
-  videoId: string = 'epnNIxhKJSc'; //'yXQViZ_6M9o'; // Example ID
+  videoId: string = 'jOoEjJjN7QI'; //'epnNIxhKJSc'; //'yXQViZ_6M9o'; // Example ID
   videoInput: string = ''; // Input for loading new video
   player: any; // YouTube Player instance
 
@@ -130,6 +130,8 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       width: '320px',
       data: { name: this.currentList.title || '' },
     });
+    console.log('Save as dialog opened', this.currentList.title);
+
     ref.afterClosed().subscribe((name?: string) => {
       if (!name) return;
       this.ngZone.run(() => {
@@ -197,7 +199,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     // R6.3: Set initial playback speed
     event.target.setPlaybackRate(this.playbackRate);
     // this.vidTitle.set(event.target.getVideoData().title);
-    console.log('Player ready:', event.target.getVideoData().title);
+    console.log('Player ready title:', event.target.getVideoData().title);
     // Auto-set title from video if current title is default
     this.ngZone.run(() => {
       const videoData = event.target.getVideoData();
