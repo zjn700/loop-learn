@@ -130,7 +130,35 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
   // Selection State
   selectedLoops = signal<Set<number>>(new Set());
+  isEditing = signal(false);
+  isLoopListVisible = signal(true);
   private _loopChecker: any;
+
+  toggleEditing() {
+    this.isEditing.update(v => !v);
+  }
+
+  toggleLoopList() {
+    this.isLoopListVisible.update(v => !v);
+  }
+
+  isFullscreen = signal(false);
+
+  toggleFullscreen(element: HTMLElement) {
+    if (!document.fullscreenElement) {
+      element.requestFullscreen().then(() => this.isFullscreen.set(true)).catch(err => {
+        console.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen().then(() => this.isFullscreen.set(false));
+    }
+
+    // Listen for change to update signal if user presses Escape
+    // Note: This adds a listener every time, which isn't ideal. 
+    // Ideally init this listener in ngOnInit. 
+    // For now, simpler: just rely on the button or update on change event somewhere else?
+    // Let's add a global listener in constructor or ngOnInit.
+  }
 
   constructor(
     private snackBar: MatSnackBar,
@@ -186,6 +214,13 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     // Changing strategy: Autosave is risky with direct file writes without user intent.
     // We will rely on manual save for now, or autosave to a temp local storage if needed.
     // Let's keep the subject but maybe just log or do nothing.
+    // Listen for fullscreen changes to update the signal (e.g. Escape key)
+    if (typeof document !== 'undefined') {
+      document.addEventListener('fullscreenchange', () => {
+        this.isFullscreen.set(!!document.fullscreenElement);
+      });
+    }
+
     this.saveSub = this.saveSubject.pipe(debounceTime(2000)).subscribe(() => {
       // Option: Autosave to currently open file handle if implemented
       // this.saveToLibrary(); 
@@ -742,32 +777,9 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     }
   }
 
-  async openFromFile(): Promise<void> {
-    if (this.isFileAccessSupported) {
-      const data = await this.fileStorage.openFile();
-      if (data) {
-        this.loadList(data);
-      }
-    } else {
-      // Trigger hidden input click
-      const input = document.getElementById('fileInput') as HTMLInputElement;
-      if (input) input.click();
-    }
-  }
 
-  async onFileSelected(event: any): Promise<void> {
-    const file = event.target.files[0];
-    if (!file) return;
-    try {
-      const data = await this.fileStorage.readFile(file);
-      this.loadList(data);
-      // Reset input
-      event.target.value = '';
-    } catch (e) {
-      console.error('Read file failed', e);
-      this.snackBar.open('Failed to read file', 'OK');
-    }
-  }
+
+
 
   private loadList(data: LoopList): void {
     this.resetEditorState();

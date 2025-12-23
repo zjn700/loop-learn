@@ -62,6 +62,9 @@ import { MatSnackBar } from '@angular/material/snack-bar';
       </div>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
+      <button mat-stroked-button (click)="openFromFile()">
+          <mat-icon>folder_open</mat-icon> Open File
+      </button>
       <button mat-button mat-dialog-close>Close</button>
     </mat-dialog-actions>
   `,
@@ -150,6 +153,18 @@ export class LibraryDialogComponent implements OnInit {
         } catch (e) {
             console.error('Failed to load file', e);
             this.snackBar.open('Failed to load file', 'OK');
+        }
+    }
+
+    async openFromFile() {
+        try {
+            const data = await this.fileStorage.openFile();
+            if (data) {
+                this.dialogRef.close(data);
+            }
+        } catch (e) {
+            console.error('Failed to open file', e);
+            this.snackBar.open('Failed to open file', 'OK');
         }
     }
 }
