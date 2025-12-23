@@ -495,6 +495,13 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
   }
 
   toggleLoopSelection(index: number): void {
+    const wasPlayingExpanded = this.isPlayingExpanded();
+    // 1. Capture currently playing loop if in expanded mode
+    let currentPlayingLoop: Loop | undefined;
+    if (wasPlayingExpanded) {
+      currentPlayingLoop = this.playQueue()[this.currentQueueIndex()];
+    }
+
     this.selectedLoops.update(set => {
       if (set.has(index)) {
         set.delete(index);
@@ -503,6 +510,45 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       }
       return new Set(set); // Return new set to trigger change
     });
+
+    // 2. If playing expanded, update the queue dynamically
+    if (wasPlayingExpanded) {
+      const indices = Array.from(this.selectedLoops()).sort((a, b) => a - b);
+      const newQueue = this.currentList().loops.filter((_, i) => indices.includes(i));
+      newQueue.sort((a, b) => a.loopIndex - b.loopIndex);
+
+      this.playQueue.set(newQueue);
+
+      if (newQueue.length === 0) {
+        this.stopExpandedLoop();
+        return;
+      }
+
+      // 3. Re-sync currentQueueIndex
+      if (currentPlayingLoop) {
+        const newIndex = newQueue.findIndex(l => l.loopIndex === currentPlayingLoop!.loopIndex);
+        if (newIndex !== -1) {
+          // Loop is still in the queue, update index
+          this.currentQueueIndex.set(newIndex);
+        } else {
+          // Loop was removed. Find the nearest following loop to maintain flow.
+          const nextLoop = newQueue.find(l => l.loopIndex > currentPlayingLoop!.loopIndex);
+          if (nextLoop) {
+            const nextIndex = newQueue.indexOf(nextLoop);
+            // Set to (nextIndex - 1) so that when the current one finishes, 
+            // the player logic (i + 1) will hit 'nextIndex'.
+            this.currentQueueIndex.set(nextIndex - 1);
+          } else {
+            // No loops after this one. Wrap to start (conceptually).
+            // Set to last index so (i + 1) triggers reset to 0
+            this.currentQueueIndex.set(newQueue.length - 1);
+          }
+        }
+      } else {
+        // Fallback if somehow nothing was playing?
+        this.currentQueueIndex.set(0);
+      }
+    }
   }
 
   isLoopSelected(index: number): boolean {
