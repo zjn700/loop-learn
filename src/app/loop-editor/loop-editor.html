@@ -13,7 +13,7 @@
 
 
       <mat-menu #mainMenu="matMenu">
-        <button mat-menu-item>
+        <button mat-menu-item (click)="openLibraryDialog()">
           <mat-icon>list</mat-icon>
           <span>Show saved loop lists</span>
         </button>
@@ -136,8 +136,7 @@
           <input type="file" id="fileInput" (change)="onFileSelected($event)" accept=".json" style="display:none" />
           <div class="flex space-x-2 pt-1">
             <button mat-stroked-button color="primary" (click)="openSaveAsDialog()">Save As</button>
-            <button *ngIf="isFileAccessSupported" mat-stroked-button (click)="saveToLibrary()"
-              [disabled]="!isLibraryAccessGranted()">
+            <button *ngIf="isFileAccessSupported" mat-stroked-button (click)="saveToLibrary()">
               Save (Update)
             </button>
 
@@ -159,45 +158,7 @@
             </mat-form-field>
           </div>
 
-          <div *ngIf="isFileAccessSupported" class="border-t pt-3 mt-2">
-            <h3 class="text-sm font-semibold mb-2 flex justify-between items-center">
-              Library Folder
-              <button mat-icon-button color="primary" (click)="selectLibraryFolder()" title="Select/Change Folder">
-                <mat-icon>folder</mat-icon>
-              </button>
-            </h3>
 
-            <div *ngIf="hasLibraryFolder() && !isLibraryAccessGranted()" class="p-2 bg-yellow-50 rounded text-sm mb-2">
-              <p>Permission needed to access library.</p>
-              <button mat-stroked-button color="accent" class="mt-1 w-full" (click)="verifyLibraryPermission()">
-                Grant Permission
-              </button>
-            </div>
-
-            <div *ngIf="hasLibraryFolder() && isLibraryAccessGranted()">
-              <div class="flex justify-between items-center mb-1">
-                <span class="text-xs text-gray-500">{{ libraryFiles().length }} files</span>
-                <button mat-icon-button (click)="refreshLibrary()" title="Refresh List">
-                  <mat-icon>refresh</mat-icon>
-                </button>
-              </div>
-              <ul class="space-y-1 max-h-48 overflow-y-auto border rounded p-1">
-                <li *ngIf="libraryFiles().length === 0" class="text-xs text-gray-400 p-1">No JSON files found.</li>
-                <li *ngFor="let file of libraryFiles()">
-                  <button mat-button class="w-full text-left truncate !justify-start" (click)="loadFromLibrary(file)">
-                    <mat-icon class="text-gray-400 !mr-2 text-sm">description</mat-icon>
-                    <span class="truncate text-sm">{{ file.name }}</span>
-                  </button>
-                </li>
-              </ul>
-            </div>
-
-            <div *ngIf="!hasLibraryFolder()"
-              class="p-3 text-center text-sm text-gray-500 border-2 border-dashed rounded-lg cursor-pointer hover:bg-gray-50"
-              (click)="selectLibraryFolder()">
-              Click to select a folder <br> to serve as your Library.
-            </div>
-          </div>
         </div>
       </div>
 

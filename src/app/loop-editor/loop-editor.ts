@@ -22,6 +22,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { AddVideoDialogComponent } from './add-video-dialog';
 import { SaveAsDialogComponent } from './save-as-dialog';
+import { LibraryDialogComponent } from './library-dialog';
 import { FileStorageService } from '../services/file-storage.service';
 
 @Component({
@@ -129,6 +130,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
   // Selection State
   selectedLoops = signal<Set<number>>(new Set());
+  private _loopChecker: any;
 
   constructor(
     private snackBar: MatSnackBar,
@@ -164,21 +166,19 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     });
   }
 
-  private _loopChecker: any = null; // interval id for checking loop end
 
-
-  // Library / Folder State
-  libraryFiles = signal<{ name: string; handle: any }[]>([]);
-  isLibraryAccessGranted = signal(false);
-  hasLibraryFolder = signal(false);
 
   // Autosave
   private saveSubject = new Subject<void>();
   private saveSub: Subscription | null = null;
 
-  ngOnInit() {
-    // Try to restore library access
-    this.initLibrary();
+
+  ngOnInit(): void {
+  }
+
+  ngAfterViewInit(): void {
+    // Try to restore library access - handled in dialog now or on demand
+    // this.initLibrary();
 
     // setup autosave (debounced) - OPTIONAL: We might want explicit save for files, 
     // or autosave to the specific file handle if we have one. 
@@ -254,6 +254,8 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
           this.currentList.update(l => ({ ...l, title: videoData.title }));
         }
       }
+
+
     }
   }
 
@@ -277,14 +279,20 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     // 1. (Cleared via Dialog)
 
     // 2. CHECK LIBRARY FOR EXISTING FILE
-    if (this.isLibraryAccessGranted()) {
-      const existingFile = await this.scanLibraryForVideoId(id);
-      if (existingFile) {
-        this.snackBar.open('Found existing loops for this video', '', { duration: 2500 });
-        await this.loadFromLibrary(existingFile);
-        return;
+    // We can only check if we already have permission (no prompt)
+    const isAccess = await this.fileStorage.verifyPermission(false);
+    const existingFile = await this.scanLibraryForVideoId(id);
+    if (existingFile) {
+      this.snackBar.open('Found existing loops for this video', '', { duration: 2500 });
+      try {
+        const data = await this.fileStorage.loadFile(existingFile.handle);
+        this.loadList(data);
+      } catch (e) {
+        console.error('Failed to load existing file', e);
       }
+      return;
     }
+
 
     // 3. NOT FOUND -> LOAD NEW
     // 3. NOT FOUND -> LOAD NEW
@@ -320,17 +328,27 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
   async scanLibraryForVideoId(videoId: string): Promise<any | null> {
     // Brute-force scan of small libraries
-    for (const fileItem of this.libraryFiles()) {
-      try {
-        const data = await this.fileStorage.loadFile(fileItem.handle);
-        if (data.videoId === videoId) {
-          return fileItem;
+    // Note: We need to get files from service now since we don't hold state
+    try {
+      // Quick check if we have access first without prompt
+      const granted = await this.fileStorage.verifyPermission(false);
+      if (!granted) return null;
+
+      const files = await this.fileStorage.getFiles();
+      for (const fileItem of files) {
+        try {
+          const data = await this.fileStorage.loadFile(fileItem.handle);
+          if (data.videoId === videoId) {
+            return fileItem;
+          }
+        } catch (e) {
+          console.warn(`Failed to scan file ${fileItem.name}`, e);
         }
-      } catch (e) {
-        console.warn(`Failed to scan file ${fileItem.name}`, e);
       }
+      return null;
+    } catch (e) {
+      return null;
     }
-    return null;
   }
 
   /** R3.2: Sets the loop start time to the current video time. */
@@ -643,83 +661,28 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
   // --- Folder / Library Logic ---
 
-  async initLibrary(): Promise<void> {
-    if (!this.fileStorage.isFileSystemAccessSupported) return;
+  openLibraryDialog(): void {
+    const ref = this.dialog.open(LibraryDialogComponent, {
+      width: '500px',
+      height: '600px',
+    });
 
-    // Check if we have a stored handle
-    const restored = await this.fileStorage.restoreDirectoryHandle();
-    this.hasLibraryFolder.set(restored);
-
-    if (restored) {
-      // We have a handle, but need to verify permissions
-      // We cannot prompt immediately on init (needs gesture), so we check 'read'
-      const granted = await this.fileStorage.verifyPermission(false);
-      this.isLibraryAccessGranted.set(granted);
-      if (granted) {
-        this.refreshLibrary();
+    ref.afterClosed().subscribe((data: LoopList | undefined) => {
+      if (data) {
+        this.loadList(data);
       }
-    }
+    });
   }
 
-  async selectLibraryFolder(): Promise<void> {
-    try {
-      await this.fileStorage.selectBaseFolder();
-      this.hasLibraryFolder.set(true);
-      this.isLibraryAccessGranted.set(true);
-      await this.refreshLibrary();
-      this.snackBar.open('Library folder selected', '', { duration: 2000 });
 
-    } catch (e: any) {
-      if (e.name !== 'AbortError') {
-        console.error('Select folder failed', e);
-        this.snackBar.open('Failed to select folder', 'OK');
-      }
-    }
-  }
-
-  async verifyLibraryPermission(): Promise<void> {
-    try {
-      const granted = await this.fileStorage.verifyPermission(true);
-
-      this.isLibraryAccessGranted.set(granted);
-      if (granted) {
-        this.refreshLibrary();
-      } else {
-        this.snackBar.open('Permission denied', 'OK');
-      }
-
-    } catch (e) {
-      console.error('Verify permission failed', e);
-    }
-  }
-
-  async refreshLibrary(): Promise<void> {
-    try {
-      const files = await this.fileStorage.getFiles();
-      this.libraryFiles.set(files);
-    } catch (e) {
-      console.error('Failed to list files', e);
-      this.libraryFiles.set([]);
-    }
-  }
-
-  async loadFromLibrary(fileItem: any): Promise<void> {
-    try {
-      const data = await this.fileStorage.loadFile(fileItem.handle);
-      this.loadList(data);
-      // Update Title to match filename (minus .json) if needed?
-      // Or keep internal title. Let's keep internal title but maybe suggest filename on save.
-    } catch (e) {
-      console.error('Failed to load file', e);
-      this.snackBar.open('Failed to load file', 'OK');
-    }
-  }
 
   async saveToLibrary(): Promise<void> {
-    if (!this.hasLibraryFolder) {
-      this.snackBar.open('No library folder selected', 'OK');
-      return;
-    }
+    // Check basic support
+    if (!this.isFileAccessSupported) return;
+
+    // Check if we have a handle (via service check, or we can catch error)
+    // We can rely on service verifyPermission which checks handle existence
+
 
     // use current title as filename
     const filename = this.currentList().title.trim() || 'Untitled';
@@ -737,7 +700,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
       await this.fileStorage.saveToFolder(filename, this.currentList());
       this.snackBar.open('Saved to Library', '', { duration: 2000 });
-      this.refreshLibrary(); // refresh list in case it's a new file
+
     } catch (e) {
       console.error('Failed to save to library', e);
       this.snackBar.open('Failed to save', 'OK');
