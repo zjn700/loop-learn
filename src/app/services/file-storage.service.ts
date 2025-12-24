@@ -117,14 +117,29 @@ export class FileStorageService {
     }
 
     /**
-     * List all JSON files in the directory.
+     * List all JSON files in the directory with metadata.
      */
-    async getFiles(): Promise<{ name: string; handle: any }[]> {
+    async getFiles(): Promise<{ name: string; handle: any; lastModified: number }[]> {
         if (!this._directoryHandle) return [];
-        const files: { name: string; handle: any }[] = [];
+        const files: { name: string; handle: any; lastModified: number }[] = [];
         for await (const entry of (this._directoryHandle as any).values()) {
             if (entry.kind === 'file' && entry.name.endsWith('.json')) {
-                files.push({ name: entry.name, handle: entry });
+                try {
+                    const file = await entry.getFile();
+                    files.push({
+                        name: entry.name,
+                        handle: entry,
+                        lastModified: file.lastModified
+                    });
+                } catch (e) {
+                    console.warn(`Failed to read metadata for ${entry.name}`, e);
+                    // Fallback if getFile fails (rare, but good for robustness)
+                    files.push({
+                        name: entry.name,
+                        handle: entry,
+                        lastModified: 0
+                    });
+                }
             }
         }
         return files;

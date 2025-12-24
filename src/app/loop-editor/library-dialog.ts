@@ -1,5 +1,6 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, computed } from '@angular/core';
 import { CommonModule, DatePipe, NgFor, NgIf } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -23,7 +24,17 @@ import { MatSnackBar } from '@angular/material/snack-bar';
         <div class="flex justify-between items-center bg-gray-50 p-3 rounded">
             <div class="flex items-center space-x-2">
                 <mat-icon class="text-gray-500">folder</mat-icon>
-                <span class="text-sm font-medium">Library Folder Connected</span>
+                <div class="flex flex-col">
+                    <span class="text-sm font-medium">Library Connected</span>
+                    <!-- Sorting Controls -->
+                    <select [ngModel]="sortOption()" (ngModelChange)="sortOption.set($event)" 
+                        class="text-xs border rounded p-1 mt-1 bg-white">
+                        <option value="modified-desc">Date Modified (Newest)</option>
+                        <option value="modified-asc">Date Modified (Oldest)</option>
+                        <option value="name-asc">Name (A-Z)</option>
+                        <option value="name-desc">Name (Z-A)</option>
+                    </select>
+                </div>
             </div>
             <div class="flex space-x-2">
                 <button mat-icon-button (click)="selectFolder()" title="Change Folder">
@@ -48,12 +59,14 @@ import { MatSnackBar } from '@angular/material/snack-bar';
              </div>
 
              <ul class="space-y-1 max-h-80 overflow-y-auto">
-                <li *ngFor="let file of libraryFiles()">
+                <li *ngFor="let file of sortedFiles()">
                   <button mat-button class="w-full text-left !justify-start hover:bg-gray-100" (click)="loadFile(file)">
                     <mat-icon class="text-gray-400 !mr-2">description</mat-icon>
-                    <div class="flex flex-col items-start overflow-hidden">
+                    <div class="flex flex-col items-start overflow-hidden w-full">
                         <span class="truncate w-full font-medium">{{ file.name }}</span>
-                        <!-- <span class="text-xs text-gray-400">Modified: ...</span> -->
+                        <span class="text-xs text-gray-400" *ngIf="file.lastModified > 0">
+                            {{ file.lastModified | date:'medium' }}
+                        </span>
                     </div>
                   </button>
                 </li>
@@ -77,12 +90,35 @@ import { MatSnackBar } from '@angular/material/snack-bar';
         MatIconModule,
         NgIf,
         NgFor,
-        // DatePipe
+        DatePipe,
+        FormsModule,
     ]
 })
 export class LibraryDialogComponent implements OnInit {
 
-    libraryFiles = signal<{ name: string; handle: any }[]>([]);
+    libraryFiles = signal<{ name: string; handle: any; lastModified: number }[]>([]);
+    sortOption = signal<'name-asc' | 'name-desc' | 'modified-desc' | 'modified-asc'>('modified-desc');
+
+    sortedFiles = computed(() => {
+        const files = [...this.libraryFiles()];
+        const option = this.sortOption();
+
+        return files.sort((a, b) => {
+            switch (option) {
+                case 'name-asc':
+                    return a.name.localeCompare(b.name);
+                case 'name-desc':
+                    return b.name.localeCompare(a.name);
+                case 'modified-desc':
+                    return b.lastModified - a.lastModified;
+                case 'modified-asc':
+                    return a.lastModified - b.lastModified;
+                default:
+                    return 0;
+            }
+        });
+    });
+
     isLibraryAccessGranted = signal(false);
     hasLibraryFolder = signal(false);
 
