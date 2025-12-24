@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, HostListener, signal, computed, WritableSignal } from '@angular/core';
-import { DecimalPipe, NgIf, NgFor } from '@angular/common';
+import { DecimalPipe, NgIf, NgFor, NgTemplateOutlet } from '@angular/common';
 import { YouTubePlayerModule } from '@angular/youtube-player';
 import { Loop, LoopList } from '../models/loop';
 import { MatIconModule } from '@angular/material/icon';
@@ -40,6 +40,7 @@ import { FileStorageService } from '../services/file-storage.service';
     MatButtonModule,
     NgIf,
     NgFor,
+    NgTemplateOutlet,
     DecimalPipe,
     FormsModule,
     MatInputModule,
@@ -238,7 +239,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     if (typeof window !== 'undefined') {
       (window as any)['onYouTubeIframeAPIReady'] = () => {
         this.player = new (window as any).YT.Player('youtube-player-embed', {
-          height: '400',
+          height: '100%',
           width: '100%',
           videoId: this.videoId(),
           playerVars: {
@@ -300,7 +301,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     // console.log('Loading video', this.videoInput());
     // Parse ID
     let id = videoIdInput.trim();
-    const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
     const match = id.match(regExp);
     if (match && match[2].length === 11) {
       id = match[2];

@@ -65,6 +65,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
       <button mat-stroked-button (click)="openFromFile()">
           <mat-icon>folder_open</mat-icon> Open File
       </button>
+      <input type="file" #fileInput (change)="onFileSelected($event)" accept=".json" style="display:none" />
       <button mat-button mat-dialog-close>Close</button>
     </mat-dialog-actions>
   `,
@@ -157,14 +158,34 @@ export class LibraryDialogComponent implements OnInit {
     }
 
     async openFromFile() {
-        try {
-            const data = await this.fileStorage.openFile();
-            if (data) {
-                this.dialogRef.close(data);
+        if (this.fileStorage.isFileSystemAccessSupported) {
+            try {
+                const data = await this.fileStorage.openFile();
+                if (data) {
+                    this.dialogRef.close(data);
+                }
+            } catch (e) {
+                console.error('Failed to open file', e);
+                this.snackBar.open('Failed to open file', 'OK');
             }
+        } else {
+            // Fallback for Safari/Legacy
+            const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+            if (input) input.click();
+        }
+    }
+
+    async onFileSelected(event: any) {
+        const file = event.target.files[0];
+        if (!file) return;
+        try {
+            const data = await this.fileStorage.readFile(file);
+            this.dialogRef.close(data);
+            // Reset input
+            event.target.value = '';
         } catch (e) {
-            console.error('Failed to open file', e);
-            this.snackBar.open('Failed to open file', 'OK');
+            console.error('Read file failed', e);
+            this.snackBar.open('Failed to read file', 'OK');
         }
     }
 }
