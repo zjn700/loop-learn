@@ -1,5 +1,6 @@
 import { Component, OnInit, signal, computed } from '@angular/core';
 import { CommonModule, DatePipe, NgFor, NgIf } from '@angular/common';
+import { LoopList } from '../models/loop';
 import { FormsModule } from '@angular/forms';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -12,20 +13,22 @@ import { MatSnackBar } from '@angular/material/snack-bar';
     template: `
     <h2 mat-dialog-title>Saved Loop Lists</h2>
     <mat-dialog-content>
-      <div *ngIf="!hasLibraryFolder()" class="flex flex-col items-center justify-center p-8 space-y-4 border-2 border-dashed rounded-lg text-gray-500">
-        <mat-icon class="text-4xl w-10 h-10">folder_open</mat-icon>
-        <p class="text-center">Select a folder on your device to store and load your loop lists.</p>
-        <button mat-raised-button color="primary" (click)="selectFolder()">
-          Select Library Folder
+      <div *ngIf="!hasLibraryFolder() && isFileSystemAccessSupported" class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded flex items-center justify-between">
+        <div class="flex items-center space-x-2 text-blue-800">
+           <mat-icon>folder_open</mat-icon>
+           <span class="text-sm">Connect a folder to sync your loops to disk.</span>
+        </div>
+        <button mat-stroked-button color="primary" (click)="selectFolder()" class="text-sm">
+          Connect Folder
         </button>
       </div>
 
-      <div *ngIf="hasLibraryFolder()" class="space-y-4">
+      <div class="space-y-4">
         <div class="flex justify-between items-center bg-gray-50 p-3 rounded">
             <div class="flex items-center space-x-2">
                 <mat-icon class="text-gray-500">folder</mat-icon>
                 <div class="flex flex-col">
-                    <span class="text-sm font-medium">Library Connected</span>
+                    <span class="text-sm font-medium">Saved Loops ({{ libraryLoops().length }})</span>
                     <!-- Sorting Controls -->
                     <select [ngModel]="sortOption()" (ngModelChange)="sortOption.set($event)" 
                         class="text-xs border rounded p-1 mt-1 bg-white">
@@ -37,7 +40,8 @@ import { MatSnackBar } from '@angular/material/snack-bar';
                 </div>
             </div>
             <div class="flex space-x-2">
-                <button mat-icon-button (click)="selectFolder()" title="Change Folder">
+                <!-- Only show Edit Folder if we actually have one connected -->
+                <button *ngIf="hasLibraryFolder()" mat-icon-button (click)="selectFolder()" title="Change Folder">
                     <mat-icon>edit</mat-icon>
                 </button>
                 <button mat-icon-button (click)="refresh()" title="Refresh">
@@ -53,19 +57,20 @@ import { MatSnackBar } from '@angular/material/snack-bar';
              </button>
         </div>
 
-        <div *ngIf="isLibraryAccessGranted()">
-             <div *ngIf="libraryFiles().length === 0" class="text-center py-8 text-gray-500 italic">
-                No JSON loop lists found in this folder.
+        <div *ngIf="isLibraryAccessGranted() || hasLibraryFolder() || true">
+             <!-- Always show list if we have DB items, even if no folder connected -->
+             <div *ngIf="libraryLoops().length === 0" class="text-center py-8 text-gray-500 italic">
+                No saved loops found in library.
              </div>
 
              <ul class="space-y-1 max-h-80 overflow-y-auto">
-                <li *ngFor="let file of sortedFiles()">
-                  <button mat-button class="w-full text-left !justify-start hover:bg-gray-100" (click)="loadFile(file)">
+                <li *ngFor="let loop of sortedLoops()">
+                  <button mat-button class="w-full text-left !justify-start hover:bg-gray-100" (click)="loadLoop(loop)">
                     <mat-icon class="text-gray-400 !mr-2">description</mat-icon>
                     <div class="flex flex-col items-start overflow-hidden w-full">
-                        <span class="truncate w-full font-medium">{{ file.name }}</span>
-                        <span class="text-xs text-gray-400" *ngIf="file.lastModified > 0">
-                            {{ file.lastModified | date:'medium' }}
+                        <span class="truncate w-full font-medium">{{ loop.title || 'Untitled' }}</span>
+                        <span class="text-xs text-gray-400" *ngIf="loop.updatedAt">
+                            {{ loop.updatedAt | date:'medium' }}
                         </span>
                     </div>
                   </button>
@@ -96,23 +101,32 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 })
 export class LibraryDialogComponent implements OnInit {
 
-    libraryFiles = signal<{ name: string; handle: any; lastModified: number }[]>([]);
+    libraryLoops = signal<LoopList[]>([]);
     sortOption = signal<'name-asc' | 'name-desc' | 'modified-desc' | 'modified-asc'>('modified-desc');
 
-    sortedFiles = computed(() => {
-        const files = [...this.libraryFiles()];
+    get isFileSystemAccessSupported(): boolean {
+        return this.fileStorage.isFileSystemAccessSupported;
+    }
+
+    sortedLoops = computed(() => {
+        const loops = [...this.libraryLoops()];
         const option = this.sortOption();
 
-        return files.sort((a, b) => {
+        return loops.sort((a, b) => {
+            const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+            const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+            const nameA = a.title || '';
+            const nameB = b.title || '';
+
             switch (option) {
                 case 'name-asc':
-                    return a.name.localeCompare(b.name);
+                    return nameA.localeCompare(nameB);
                 case 'name-desc':
-                    return b.name.localeCompare(a.name);
+                    return nameB.localeCompare(nameA);
                 case 'modified-desc':
-                    return b.lastModified - a.lastModified;
+                    return timeB - timeA;
                 case 'modified-asc':
-                    return a.lastModified - b.lastModified;
+                    return timeA - timeB;
                 default:
                     return 0;
             }
@@ -141,10 +155,9 @@ export class LibraryDialogComponent implements OnInit {
             // Check permission without prompting
             const granted = await this.fileStorage.verifyPermission(false);
             this.isLibraryAccessGranted.set(granted);
-            if (granted) {
-                this.refresh();
-            }
         }
+        // Always refresh loops from DB
+        this.refresh();
     }
 
     async selectFolder() {
@@ -175,22 +188,16 @@ export class LibraryDialogComponent implements OnInit {
 
     async refresh() {
         try {
-            const files = await this.fileStorage.getFiles();
-            this.libraryFiles.set(files);
+            const loops = await this.fileStorage.getAllLoops();
+            this.libraryLoops.set(loops);
         } catch (e) {
-            console.error('Failed to list files', e);
-            this.libraryFiles.set([]);
+            console.error('Failed to list loops', e);
+            this.libraryLoops.set([]);
         }
     }
 
-    async loadFile(fileItem: any) {
-        try {
-            const data = await this.fileStorage.loadFile(fileItem.handle);
-            this.dialogRef.close(data);
-        } catch (e) {
-            console.error('Failed to load file', e);
-            this.snackBar.open('Failed to load file', 'OK');
-        }
+    loadLoop(loop: LoopList) {
+        this.dialogRef.close(loop);
     }
 
     async openFromFile() {

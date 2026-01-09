@@ -23,6 +23,7 @@
         </button>
         <button mat-menu-item (click)="toggleEditing()">
           <mat-icon>edit</mat-icon>
+          <!-- <mat-icon fontIcon="zuul"></mat-icon> -->
           <span>Create or edit a loop list</span>
         </button>
         <button mat-menu-item>
@@ -162,8 +163,8 @@
 
         <div class="flex space-x-2 pt-1">
           <button mat-stroked-button color="primary" (click)="openSaveAsDialog()">Save As</button>
-          <button *ngIf="isFileAccessSupported" mat-stroked-button (click)="saveToLibrary()">
-            Save (Update)
+          <button mat-stroked-button (click)="saveToLibrary()">
+            Save
           </button>
 
 

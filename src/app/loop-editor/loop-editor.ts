@@ -713,29 +713,28 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
 
   async saveToLibrary(): Promise<void> {
-    // Check basic support
-    if (!this.isFileAccessSupported) return;
-
-    // Check if we have a handle (via service check, or we can catch error)
-    // We can rely on service verifyPermission which checks handle existence
-
+    // Note: We now support DB-only save, so we do not enforce isFileAccessSupported check here.
 
     // use current title as filename
     const filename = this.currentList().title.trim() || 'Untitled';
 
     try {
-      // Ensure we have write permission
-      const granted = await this.fileStorage.verifyPermission(true);
-      if (!granted) {
-        this.snackBar.open('Write permission needed', 'OK');
-        return;
+      // If we are actually connected to a folder (Chrome Desktop), check permission
+      if (this.fileStorage.currentDirectoryHandle) {
+        const granted = await this.fileStorage.verifyPermission(true);
+        if (!granted) {
+          this.snackBar.open('Write permission needed', 'OK');
+          return;
+        }
       }
 
       // Update timestamp
       this.currentList.update(l => ({ ...l, updatedAt: new Date() }));
 
       await this.fileStorage.saveToFolder(filename, this.currentList());
-      this.snackBar.open('Saved to Library', '', { duration: 2000 });
+
+      const msg = this.fileStorage.currentDirectoryHandle ? 'Saved to Library (Disk)' : 'Saved to Browser DB';
+      this.snackBar.open(msg, '', { duration: 2000 });
 
     } catch (e) {
       console.error('Failed to save to library', e);

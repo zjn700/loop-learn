@@ -1,9 +1,8 @@
 import { Injectable } from '@angular/core';
 import { LoopList } from '../models/loop';
 
-const DB_NAME = 'LoopLearnDB';
-const STORE_NAME = 'handles';
-const KEY_NAME = 'libraryDirHandle';
+import { db } from '../db/db';
+
 
 @Injectable({
     providedIn: 'root',
@@ -12,58 +11,11 @@ export class FileStorageService {
     private _directoryHandle: any = null; // FileSystemDirectoryHandle
 
     constructor() {
-        if (typeof window !== 'undefined') {
-            this.initDB();
-        }
+        // Dexie handles init automatically
     }
 
     // --- IndexedDB Helpers for Persistence ---
-    private initDB(): Promise<void> {
-        if (typeof window === 'undefined') return Promise.resolve();
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, 1);
-            request.onupgradeneeded = (event: any) => {
-                const db = event.target.result;
-                if (!db.objectStoreNames.contains(STORE_NAME)) {
-                    db.createObjectStore(STORE_NAME);
-                }
-            };
-            request.onsuccess = () => resolve();
-            request.onerror = (e) => reject(e);
-        });
-    }
 
-    private async getStoredHandle(): Promise<any> {
-        if (typeof window === 'undefined') return null;
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, 1);
-            request.onsuccess = (event: any) => {
-                const db = event.target.result;
-                const tx = db.transaction(STORE_NAME, 'readonly');
-                const store = tx.objectStore(STORE_NAME);
-                const getReq = store.get(KEY_NAME);
-                getReq.onsuccess = () => resolve(getReq.result);
-                getReq.onerror = () => reject(getReq.error);
-            };
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    private async storeHandle(handle: any): Promise<void> {
-        if (typeof window === 'undefined') return;
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, 1);
-            request.onsuccess = (event: any) => {
-                const db = event.target.result;
-                const tx = db.transaction(STORE_NAME, 'readwrite');
-                const store = tx.objectStore(STORE_NAME);
-                const putReq = store.put(handle, KEY_NAME);
-                putReq.onsuccess = () => resolve();
-                putReq.onerror = () => reject(putReq.error);
-            };
-            request.onerror = () => reject(request.error);
-        });
-    }
 
     // --- Directory Operations ---
 
@@ -84,7 +36,7 @@ export class FileStorageService {
             mode: 'readwrite',
         });
         this._directoryHandle = handle;
-        await this.storeHandle(handle);
+        await db.handles.put({ id: 'libraryDirHandle', handle });
     }
 
     /**
@@ -92,9 +44,9 @@ export class FileStorageService {
      * NOTE: Permissions might need to be re-verified by user action.
      */
     async restoreDirectoryHandle(): Promise<boolean> {
-        const handle = await this.getStoredHandle();
-        if (handle) {
-            this._directoryHandle = handle;
+        const entry = await db.handles.get('libraryDirHandle');
+        if (entry && entry.handle) {
+            this._directoryHandle = entry.handle;
             return true;
         }
         return false;
@@ -120,29 +72,83 @@ export class FileStorageService {
      * List all JSON files in the directory with metadata.
      */
     async getFiles(): Promise<{ name: string; handle: any; lastModified: number }[]> {
+        // Try reading from DB first to see what we have
+        // However, the original method returns file handles.
+        // For Hybrid, we want to return LoopList objects mostly.
+        // But for compatibility with existing components that expect file list...
+        // Let's keep this as "Directory File List" helper.
+
         if (!this._directoryHandle) return [];
         const files: { name: string; handle: any; lastModified: number }[] = [];
-        for await (const entry of (this._directoryHandle as any).values()) {
-            if (entry.kind === 'file' && entry.name.endsWith('.json')) {
-                try {
-                    const file = await entry.getFile();
-                    files.push({
-                        name: entry.name,
-                        handle: entry,
-                        lastModified: file.lastModified
-                    });
-                } catch (e) {
-                    console.warn(`Failed to read metadata for ${entry.name}`, e);
-                    // Fallback if getFile fails (rare, but good for robustness)
-                    files.push({
-                        name: entry.name,
-                        handle: entry,
-                        lastModified: 0
-                    });
+        try {
+            for await (const entry of (this._directoryHandle as any).values()) {
+                if (entry.kind === 'file' && entry.name.endsWith('.json')) {
+                    try {
+                        const file = await entry.getFile();
+                        files.push({
+                            name: entry.name,
+                            handle: entry,
+                            lastModified: file.lastModified
+                        });
+                    } catch (e) {
+                        files.push({ name: entry.name, handle: entry, lastModified: 0 });
+                    }
                 }
             }
+        } catch (e) {
+            console.warn('Error reading directory handle', e);
+            // If handle is stale, stick to DB?
         }
         return files;
+    }
+
+    /**
+     * Primary method to get all loops.
+     * Strategy:
+     * 1. If we have a directory handle, Sync it (read files, update DB).
+     * 2. Return all loops from DB.
+     */
+    async getAllLoops(): Promise<LoopList[]> {
+        if (this._directoryHandle) {
+            await this.syncDirectory();
+        }
+        return db.loops.toArray();
+    }
+
+    /**
+     * Syncs the currently selected directory with the DB.
+     * - Reads all .json files
+     * - Parses them
+     * - Updates/Inserts into DB
+     */
+    async syncDirectory(): Promise<void> {
+        if (!this._directoryHandle) return;
+        const fileEntries = await this.getFiles();
+
+        for (const entry of fileEntries) {
+            try {
+                const loop = await this.loadFile(entry.handle);
+                // Upsert into DB based on title or some ID?
+                // Our loop model might not have a consistent ID. 
+                // Let's use 'title' as a soft key for duplications or just put it in.
+                // ideally loops have a UUID.
+
+                // For now, we put. If ID exists it updates, else adds.
+                // We need to query if a loop with this title exists to avoid duplicates if ID is missing.
+
+                // Simple Sync: Check if title exists to prevent duplicates on first import
+                const existing = await db.loops.where('title').equals(loop.title).first();
+                if (existing) {
+                    loop.id = existing.id; // Preserve DB ID
+                } else if (!loop.id) {
+                    loop.id = crypto.randomUUID(); // Generate new ID if missing
+                }
+
+                await db.loops.put(loop);
+            } catch (err) {
+                console.error('Failed to sync file', entry.name, err);
+            }
+        }
     }
 
     /**
@@ -161,17 +167,32 @@ export class FileStorageService {
      * Save to the current directory with the given filename (title).
      */
     async saveToFolder(filename: string, data: LoopList): Promise<void> {
-        if (!this._directoryHandle) throw new Error('No folder selected');
+        // 1. Ensure ID exists
+        if (!data.id) {
+            data.id = crypto.randomUUID();
+        }
 
-        // Sanitize and ensure .json extension
-        const safeName = this.sanitizeFilename(filename);
-        const name = safeName.endsWith('.json') ? safeName : `${safeName}.json`;
+        // Upsert to DB
+        await db.loops.put(data);
 
-        // Create/Update file in the directory
-        const fileHandle = await this._directoryHandle.getFileHandle(name, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(JSON.stringify(data, null, 2));
-        await writable.close();
+
+        // 2. Save to File System (Secondary / Sync)
+        if (this._directoryHandle) {
+            try {
+                // Sanitize and ensure .json extension
+                const safeName = this.sanitizeFilename(filename);
+                const name = safeName.endsWith('.json') ? safeName : `${safeName}.json`;
+
+                // Create/Update file in the directory
+                const fileHandle = await this._directoryHandle.getFileHandle(name, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(JSON.stringify(data, null, 2));
+                await writable.close();
+            } catch (e) {
+                console.warn('Failed to save to file system (access denied?)', e);
+                // Don't crash app, just warn, since DB save worked.
+            }
+        }
     }
 
     // --- Legacy / Single File Utils ---
