@@ -164,17 +164,23 @@ export class FileStorageService {
     }
 
     /**
-     * Save to the current directory with the given filename (title).
+     * Save loop to Database ONLY.
      */
-    async saveToFolder(filename: string, data: LoopList): Promise<void> {
+    async saveLoopToDb(data: LoopList): Promise<void> {
         // 1. Ensure ID exists
         if (!data.id) {
             data.id = crypto.randomUUID();
         }
-
         // Upsert to DB
         await db.loops.put(data);
+    }
 
+    /**
+     * Save to the current directory with the given filename (title).
+     */
+    async saveToFolder(filename: string, data: LoopList): Promise<void> {
+        // 1. Save to DB first
+        await this.saveLoopToDb(data);
 
         // 2. Save to File System (Secondary / Sync)
         if (this._directoryHandle) {

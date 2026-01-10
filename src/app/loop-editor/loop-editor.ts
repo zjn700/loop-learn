@@ -223,8 +223,8 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     }
 
     this.saveSub = this.saveSubject.pipe(debounceTime(2000)).subscribe(() => {
-      // Option: Autosave to currently open file handle if implemented
-      // this.saveToLibrary(); 
+      console.log('Auto-saving...');
+      this.saveToLibrary(true); // silent = true
     });
 
     // 1. Load the YouTube Iframe Player API script
@@ -712,33 +712,24 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
 
 
-  async saveToLibrary(): Promise<void> {
-    // Note: We now support DB-only save, so we do not enforce isFileAccessSupported check here.
-
-    // use current title as filename
-    const filename = this.currentList().title.trim() || 'Untitled';
+  async saveToLibrary(silent = false): Promise<void> {
+    // Auto-save now ONLY saves to the local database to avoid browser restriction issues (Chrome).
+    // File export/sync will be handled manually in a future "Export" feature.
 
     try {
-      // If we are actually connected to a folder (Chrome Desktop), check permission
-      if (this.fileStorage.currentDirectoryHandle) {
-        const granted = await this.fileStorage.verifyPermission(true);
-        if (!granted) {
-          this.snackBar.open('Write permission needed', 'OK');
-          return;
-        }
-      }
-
       // Update timestamp
       this.currentList.update(l => ({ ...l, updatedAt: new Date() }));
 
-      await this.fileStorage.saveToFolder(filename, this.currentList());
+      // Save to DB Only
+      await this.fileStorage.saveLoopToDb(this.currentList());
 
-      const msg = this.fileStorage.currentDirectoryHandle ? 'Saved to Library (Disk)' : 'Saved to Browser DB';
-      this.snackBar.open(msg, '', { duration: 2000 });
+      if (!silent) {
+        this.snackBar.open('Saved to Browser DB', '', { duration: 2000 });
+      }
 
     } catch (e) {
       console.error('Failed to save to library', e);
-      this.snackBar.open('Failed to save', 'OK');
+      if (!silent) this.snackBar.open('Failed to save', 'OK');
     }
   }
   // --- File System Storage ---

@@ -156,19 +156,8 @@
 
 
       <div *ngIf="isEditing()" class="mt-4 space-y-2">
-        <button mat-raised-button color="primary" class="w-full" (click)="saveToFile()">
-          <mat-icon>save</mat-icon> Save to File (Local / Cloud)
-        </button>
-
-
-        <div class="flex space-x-2 pt-1">
-          <button mat-stroked-button color="primary" (click)="openSaveAsDialog()">Save As</button>
-          <button mat-stroked-button (click)="saveToLibrary()">
-            Save
-          </button>
-
-
-        </div>
+        <!-- Save buttons removed for Auto-Save -->
+        <!-- <div class="flex space-x-2 pt-1"> ... </div> -->
         <div class="block justify-between items-center my-3">
           <span class="text-sm font-medium px-2">Public Access</span>
           <mat-slide-toggle [ngModel]="currentList().isPublic" (ngModelChange)="updateListPublic($event)"
