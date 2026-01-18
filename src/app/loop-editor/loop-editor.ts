@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, HostListener, signal, computed, WritableSignal } from '@angular/core';
-import { DecimalPipe, NgIf, NgFor, NgTemplateOutlet } from '@angular/common';
+import { DecimalPipe, NgIf, NgFor, NgTemplateOutlet, NgClass } from '@angular/common';
 import { YouTubePlayerModule } from '@angular/youtube-player';
 import { Loop, LoopList } from '../models/loop';
 import { MatIconModule } from '@angular/material/icon';
@@ -23,6 +23,7 @@ import { DragDropModule, CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-
 import { AddVideoDialogComponent } from './add-video-dialog';
 import { SaveAsDialogComponent } from './save-as-dialog';
 import { LibraryDialogComponent } from './library-dialog';
+import { ConfirmDialogComponent } from './confirm-dialog';
 import { FileStorageService } from '../services/file-storage.service';
 
 @Component({
@@ -41,6 +42,7 @@ import { FileStorageService } from '../services/file-storage.service';
     NgIf,
     NgFor,
     NgTemplateOutlet,
+    NgClass,
     DecimalPipe,
     FormsModule,
     MatInputModule,
@@ -141,6 +143,12 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
   toggleLoopList() {
     this.isLoopListVisible.update(v => !v);
+  }
+
+  isPracticeMode = signal(false);
+
+  togglePracticeMode() {
+    this.isPracticeMode.update(v => !v);
   }
 
   isFullscreen = signal(false);
@@ -632,13 +640,38 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
 
   deleteLoop(index: number): void {
     if (index >= 0 && index < this.currentList().loops.length) {
-      this.currentList.update(l => {
-        l.loops.splice(index, 1);
-        return { ...l };
+      const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+        width: '350px',
+        data: {
+          title: 'Delete Loop',
+          message: 'Are you sure you want to delete this loop?',
+          confirmText: 'Delete'
+        }
       });
-      this.reindexLoops();
-      this.markListChanged();
-      this.snackBar.open('Loop deleted', '', { duration: 1000 });
+
+      dialogRef.afterClosed().subscribe(result => {
+        if (result) {
+          const loopToDelete = this.currentList().loops[index];
+
+          this.currentList.update(l => {
+            l.loops.splice(index, 1);
+            return { ...l };
+          });
+          this.reindexLoops();
+          this.markListChanged();
+
+          const snackBarRef = this.snackBar.open('Loop deleted', 'Undo', { duration: 5000 });
+
+          snackBarRef.onAction().subscribe(() => {
+            this.currentList.update(l => {
+              l.loops.splice(index, 0, loopToDelete);
+              return { ...l };
+            });
+            this.reindexLoops();
+            this.markListChanged();
+          });
+        }
+      });
     }
   }
 

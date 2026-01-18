@@ -13,7 +13,8 @@ import { MatSnackBar } from '@angular/material/snack-bar';
     template: `
     <h2 mat-dialog-title>Saved Loop Lists</h2>
     <mat-dialog-content>
-      <div *ngIf="!hasLibraryFolder() && isFileSystemAccessSupported" class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded flex items-center justify-between">
+      <!-- Hidden for cleaner UX (DB-only mode) -->
+      <!-- <div *ngIf="!hasLibraryFolder() && isFileSystemAccessSupported" class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded flex items-center justify-between">
         <div class="flex items-center space-x-2 text-blue-800">
            <mat-icon>folder_open</mat-icon>
            <span class="text-sm">Connect a folder to sync your loops to disk.</span>
@@ -21,12 +22,12 @@ import { MatSnackBar } from '@angular/material/snack-bar';
         <button mat-stroked-button color="primary" (click)="selectFolder()" class="text-sm">
           Connect Folder
         </button>
-      </div>
+      </div> -->
 
       <div class="space-y-4">
         <div class="flex justify-between items-center bg-gray-50 p-3 rounded">
             <div class="flex items-center space-x-2">
-                <mat-icon class="text-gray-500">folder</mat-icon>
+                <mat-icon class="text-gray-500">folder_special</mat-icon>
                 <div class="flex flex-col">
                     <span class="text-sm font-medium">Saved Loops ({{ libraryLoops().length }})</span>
                     <!-- Sorting Controls -->
@@ -41,21 +42,21 @@ import { MatSnackBar } from '@angular/material/snack-bar';
             </div>
             <div class="flex space-x-2">
                 <!-- Only show Edit Folder if we actually have one connected -->
-                <button *ngIf="hasLibraryFolder()" mat-icon-button (click)="selectFolder()" title="Change Folder">
+                <!-- <button *ngIf="hasLibraryFolder()" mat-icon-button (click)="selectFolder()" title="Change Folder">
                     <mat-icon>edit</mat-icon>
-                </button>
+                </button> -->
                 <button mat-icon-button (click)="refresh()" title="Refresh">
                     <mat-icon>refresh</mat-icon>
                 </button>
             </div>
         </div>
 
-        <div *ngIf="!isLibraryAccessGranted()" class="p-4 bg-yellow-50 rounded border border-yellow-200 text-center">
+        <!-- <div *ngIf="!isLibraryAccessGranted()" class="p-4 bg-yellow-50 rounded border border-yellow-200 text-center">
              <p class="mb-2 text-sm text-yellow-800">Permission needed to access this folder.</p>
              <button mat-stroked-button color="accent" (click)="verifyPermission()">
                 Grant Permission
              </button>
-        </div>
+        </div> -->
 
         <div *ngIf="isLibraryAccessGranted() || hasLibraryFolder() || true">
              <!-- Always show list if we have DB items, even if no folder connected -->
