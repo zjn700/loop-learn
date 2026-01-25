@@ -273,6 +273,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
     if (videoData && videoData.title) {
       if (!this.currentList().title || this.currentList().title === 'New Language Practice') {
         this.currentList.update(l => ({ ...l, title: videoData.title }));
+        this.markListChanged();
       }
     }
   }
@@ -296,6 +297,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       if (videoData && videoData.title) {
         if (!this.currentList().title || this.currentList().title === 'New Language Practice' || this.currentList().title === '') {
           this.currentList.update(l => ({ ...l, title: videoData.title }));
+          this.markListChanged();
         }
       }
 
@@ -366,6 +368,7 @@ export class LoopEditorComponent implements OnInit, OnDestroy {
       this.player.loadVideoById(id);
       // console.log('Loaded video', id);
     }
+    this.saveToLibrary(true); // Save empty list to DB immediately
 
     this.snackBar.open('There are no loops yet for this video. You can create one now', 'OK', { duration: 5000 });
   }
